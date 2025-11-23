@@ -51,7 +51,8 @@ Liku isn't just a menu; he has needs!
 
 1.  **Clone & Build**:
     ```bash
-    cd extension
+    git clone https://github.com/TayDa64/LikuBuddy.git
+    cd LikuBuddy
     npm install
     npm run build
     ```
