@@ -136,6 +136,17 @@ Liku isn't just a menu; he has needs!
 2. Select "💻 LikuOS Stats"
 3. Watch real-time updates of your progress
 
+### Using Mini Dashboard Mode
+1. Launch LikuBuddy: `/liku`
+2. Press `m` to toggle mini dashboard (compact 2-line view)
+3. Press `m` again to return to full menu
+4. Mini mode shows: Pro Tokens, Level, Energy, Happiness at a glance
+
+**Mini mode is perfect for:**
+- Quick status checks without leaving your workflow
+- Monitoring Liku's stats while working on other tasks
+- Reducing screen clutter when you don't need the full menu
+
 ## 🛠️ Tech Stack
 
 *   **Runtime**: Node.js

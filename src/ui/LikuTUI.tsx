@@ -19,6 +19,7 @@ const GameHub = () => {
 	const [proTokens, setProTokens] = useState<ProTokens | null>(null);
 	const [communityGameComponent, setCommunityGameComponent] = useState<any>(null);
 	const [showLikuOS, setShowLikuOS] = useState(false);
+	const [miniDashboardMode, setMiniDashboardMode] = useState(false);
 
 	const refreshData = () => {
 		db.getStats().then(setStats).catch(console.error);
@@ -122,6 +123,12 @@ const GameHub = () => {
 			return;
 		}
 
+		// Toggle mini dashboard mode with 'm' key
+		if (input === 'm' && !activeGame) {
+			setMiniDashboardMode(prev => !prev);
+			return;
+		}
+
 		const isGameMenu = activeGame === 'games_menu';
 		const items = isGameMenu ? gameMenuItems : mainMenuItems;
 		const setSelection = isGameMenu ? setSelectedGameMenuIndex : setSelectedGame;
@@ -221,6 +228,18 @@ const GameHub = () => {
 	const currentMenuItems = isGameMenu ? gameMenuItems : mainMenuItems;
 	const currentSelection = isGameMenu ? selectedGameMenuIndex : selectedGame;
 
+	// Mini dashboard mode - show compact 2-line stats only
+	if (miniDashboardMode && !activeGame) {
+		return (
+			<Box flexDirection="column">
+				<LikuOS mode="CLI" />
+				<Box>
+					<Text dimColor>Press 'm' to show full menu</Text>
+				</Box>
+			</Box>
+		);
+	}
+
 	return (
 		<Box flexDirection="column" padding={1} borderStyle="round" borderColor={getBorderColor()} width={60}>
 			<Box marginBottom={1} flexDirection="column" alignItems="center">
@@ -265,8 +284,9 @@ const GameHub = () => {
 				)}
 			</Box>
 
-			<Box marginTop={1}>
+			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>Use ↑/↓ to select, Enter to act{isGameMenu ? ', Esc to back' : ''}</Text>
+				<Text dimColor>Press 'm' to toggle mini dashboard mode</Text>
 			</Box>
 		</Box>
 	);
