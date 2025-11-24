@@ -11,7 +11,7 @@
 - **Database**: SQLite3 (native module)
 - **AI Integration**: Google Gemini 1.5 Pro API
 - **Target Runtime**: Node.js v20.x
-- **Size**: Small-to-medium (~13 TypeScript source files)
+- **Size**: Small-to-medium (13 TypeScript source files)
 - **Build Time**: ~2 seconds (TypeScript compilation)
 
 ## Build & Development Workflow
@@ -352,7 +352,7 @@ Validation is entirely manual via local build and testing.
 ---
 
 **Last Updated**: 2024-11-24  
-**Project Version**: v2.0 (Generative Game Platform)  
-**Minimum Node Version**: 20.x
+**Package Version**: 1.0.0 (Architecture: v2.0 Generative Game Platform)  
+**Recommended Node Version**: 20.x (not enforced in package.json)
 
 By following these instructions, you should be able to build, run, and modify LikuBuddy efficiently without unnecessary exploration or trial-and-error.
