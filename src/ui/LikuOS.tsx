@@ -55,25 +55,28 @@ export const LikuOS: React.FC<LikuOSProps> = ({ mode }) => {
   const stats = usePlayerStats();
 
   if (mode === 'CLI') {
-    // The "Vibrant One-Liner" for CLI integration
+    // The "Vibrant Two-Liner" for CLI integration with proper wrapping
     return (
-      <Box borderStyle="round" borderColor="green" paddingX={1}>
-        <Text bold color="yellow">💎 </Text>
-        <Text bold color="green">{balance?.balance || 0}</Text>
-        <Text dimColor> | </Text>
-        <Text color="blue" bold>LikuBuddy OS v2.0</Text>
-        <Text dimColor> | </Text>
+      <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
+        <Box flexDirection="row" justifyContent="space-between">
+          <Box>
+            <Text bold color="yellow">💎 </Text>
+            <Text bold color="green">{balance?.balance || 0}</Text>
+          </Box>
+          <Text color="blue" bold>LikuBuddy OS v2.0</Text>
+          {stats && (
+            <Text>Lvl <Text bold color="cyan">{stats.level}</Text></Text>
+          )}
+          <Text italic dimColor>Running</Text>
+        </Box>
         {stats && (
-          <>
-            <Text>Lvl {stats.level}</Text>
-            <Text dimColor> | </Text>
-            <Text color="cyan">⚡{stats.energy}%</Text>
-            <Text dimColor> | </Text>
-            <Text color="magenta">💖{stats.happiness}%</Text>
-            <Text dimColor> | </Text>
-          </>
+          <Box flexDirection="row" justifyContent="space-between">
+            <Text color="cyan">⚡Energy: {stats.energy}%</Text>
+            <Text color="magenta">💖Happiness: {stats.happiness}%</Text>
+            <Text color="yellow">🍖Hunger: {stats.hunger}%</Text>
+            <Text color="white">✨XP: {stats.xp}</Text>
+          </Box>
         )}
-        <Text italic dimColor>Running</Text>
       </Box>
     );
   }

@@ -33,7 +33,7 @@ const GameHub = () => {
 
 	const mainMenuItems = [
 		{ id: 'games_menu', name: '🎮 Let\'s Play' },
-		{ id: 'builder', name: '🛠️ Build a Game (AI-Powered)' },
+		{ id: 'builder', name: '🔨 Let\'s Build a Game! (Open Source SDK)' },
 		{ id: 'community', name: '🌟 Community Games' },
 		{ id: 'liku_os', name: '💻 LikuOS Stats' },
 		{ id: 'feed', name: '🍖 Feed Liku (XP -10, Hunger -20)' },
@@ -241,25 +241,24 @@ const GameHub = () => {
 	}
 
 	return (
-		<Box flexDirection="column" padding={1} borderStyle="round" borderColor={getBorderColor()} width={60}>
+		<Box flexDirection="column" padding={1} borderStyle="round" borderColor={getBorderColor()}>
 			<Box marginBottom={1} flexDirection="column" alignItems="center">
 				<Text bold color={getTitleColor()}>🎮 LikuBuddy Game Hub 🎮</Text>
 				<Text>Your AI Companion & Generative Game Platform</Text>
 			</Box>
 
-			<Box height={4}>
+			<Box flexDirection="column" marginBottom={1}>
 				{stats && proTokens ? (
-					<Box flexDirection="column">
-						<Box borderStyle="single" borderColor={settings?.theme === 'matrix' ? 'green' : 'yellow'} paddingX={1} marginBottom={1} flexDirection="row" gap={2}>
-							<Text>Level: {stats.level}</Text>
-							<Text>XP: {stats.xp}</Text>
-							<Text>Hunger: {stats.hunger}%</Text>
-							<Text>Energy: {stats.energy}%</Text>
-							<Text>Happiness: {stats.happiness}%</Text>
+					<Box flexDirection="column" borderStyle="single" borderColor={settings?.theme === 'matrix' ? 'green' : 'yellow'} paddingX={1}>
+						<Box flexDirection="row" justifyContent="space-between">
+							<Text>Level: <Text bold color="cyan">{stats.level}</Text></Text>
+							<Text>XP: <Text bold color="yellow">{stats.xp}</Text></Text>
+							<Text>💎 Tokens: <Text bold color="green">{proTokens.balance}</Text></Text>
 						</Box>
-						<Box paddingX={1}>
-							<Text bold color="yellow">💎 Pro Tokens: </Text>
-							<Text color="green">{proTokens.balance}</Text>
+						<Box flexDirection="row" justifyContent="space-between">
+							<Text>Hunger: <Text color={stats.hunger < 70 ? 'green' : 'yellow'}>{stats.hunger}%</Text></Text>
+							<Text>Energy: <Text color={stats.energy > 30 ? 'green' : 'red'}>{stats.energy}%</Text></Text>
+							<Text>Happiness: <Text color={stats.happiness > 50 ? 'green' : 'yellow'}>{stats.happiness}%</Text></Text>
 						</Box>
 					</Box>
 				) : (
@@ -267,22 +266,22 @@ const GameHub = () => {
 				)}
 			</Box>
 
-			<Box flexDirection="column" height={Math.max(mainMenuItems.length, gameMenuItems.length)}>
+			<Box flexDirection="column" marginBottom={1}>
 				{currentMenuItems.map((item, index) => (
 					<Box key={item.id}>
-						<Text color={index === currentSelection ? 'green' : 'white'}>
-							{index === currentSelection ? '> ' : '  '}
+						<Text color={index === currentSelection ? 'green' : 'white'} bold={index === currentSelection}>
+							{index === currentSelection ? '▶ ' : '  '}
 							{item.name}
 						</Text>
 					</Box>
 				))}
 			</Box>
 			
-			<Box height={2} marginTop={1}>
-				{message && (
+			{message && (
+				<Box marginBottom={1}>
 					<Text color="yellow" bold>{message}</Text>
-				)}
-			</Box>
+				</Box>
+			)}
 
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>Use ↑/↓ to select, Enter to act{isGameMenu ? ', Esc to back' : ''}</Text>
