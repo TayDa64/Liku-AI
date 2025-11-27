@@ -27,7 +27,7 @@ type Decoration = {
 	color: string;
 };
 
-type GameState = 'START' | 'PLAYING' | 'GAME_OVER';
+type GameState = 'START' | 'COUNTDOWN' | 'PLAYING' | 'GAME_OVER';
 
 const OBSTACLE_TYPES = [
 	{ type: 'CACTUS', char: '🌵', y: 0 },
@@ -55,8 +55,9 @@ const DEATH_MESSAGES = [
 	"System crash!",
 ];
 
-const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' }) => {
+const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' | 'ai' }) => {
 	const [gameState, setGameState] = useState<GameState>('START');
+	const [countdown, setCountdown] = useState<number>(3);
 	const [score, setScore] = useState(0);
 	const [dinoY, setDinoY] = useState(0);
 	const [velocity, setVelocity] = useState(0);
@@ -79,12 +80,28 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 	});
 
 	// Game Constants based on difficulty
-	const SPEED_MS = difficulty === 'hard' ? 60 : difficulty === 'easy' ? 100 : 80;
+	const SPEED_MS = difficulty === 'hard' ? 60 : difficulty === 'easy' ? 100 : difficulty === 'ai' ? 150 : 80;
 	const GRAVITY = 0.6;
 	const JUMP_STRENGTH = 2.5; // Adjusted for controlled jump height (approx 6 units)
-	const SPAWN_RATE = difficulty === 'hard' ? 0.15 : difficulty === 'easy' ? 0.05 : 0.1;
+	const SPAWN_RATE = difficulty === 'hard' ? 0.15 : difficulty === 'easy' ? 0.05 : difficulty === 'ai' ? 0.04 : 0.1;
 
-	const startGame = () => {
+	// Countdown timer for AI mode
+	useEffect(() => {
+		if (gameState !== 'COUNTDOWN') return;
+		
+		if (countdown <= 0) {
+			startGameActual();
+			return;
+		}
+		
+		const timer = setTimeout(() => {
+			setCountdown(c => c - 1);
+		}, 1000);
+		
+		return () => clearTimeout(timer);
+	}, [gameState, countdown]);
+
+	const startGameActual = () => {
 		setGameState('PLAYING');
 		setScore(0);
 		setDinoY(0);
@@ -105,6 +122,17 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 			isPlaying: true,
 			tickCount: 0
 		};
+	};
+
+	const startGame = () => {
+		if (difficulty === 'ai') {
+			// AI mode: start countdown first
+			setCountdown(3);
+			setGameState('COUNTDOWN');
+		} else {
+			// Normal mode: start immediately
+			startGameActual();
+		}
 	};
 
 	const saveResult = async (finalScore: number) => {
@@ -136,6 +164,14 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 			if (key.return) {
 				startGame();
 			} else if (key.escape || input === 'q') {
+				onExit();
+			}
+			return;
+		}
+		
+		if (gameState === 'COUNTDOWN') {
+			// Allow quit during countdown
+			if (key.escape || input === 'q') {
 				onExit();
 			}
 			return;
@@ -300,6 +336,7 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 
 	useEffect(() => {
 		let status = `Score: ${score} | State: ${gameState}`;
+		if (gameState === 'COUNTDOWN') status = `COUNTDOWN: ${countdown}... Get Ready!`;
 		if (message) status += ` | Message: ${message}`;
 
 		let visualState = "";
@@ -310,6 +347,11 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 			visualState += "The dino (D) runs automatically.\n";
 			visualState += "Jump over obstacles (X) to survive.";
 			controls = "ENTER to start, Q/ESC to quit.";
+		} else if (gameState === 'COUNTDOWN') {
+			visualState = `\n*** COUNTDOWN: ${countdown} ***\n\n`;
+			visualState += "Game starts in " + countdown + " seconds.\n";
+			visualState += "Get ready to press SPACE when you see [JUMP NOW!]";
+			controls = "Q/ESC to quit.";
 		} else if (gameState === 'GAME_OVER') {
 			visualState = `Final Score: ${score}\n`;
 			visualState += message || "Game Over!";
@@ -448,6 +490,15 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 			<Box marginTop={1}>
 				{gameState === 'START' && (
 					<Text color="green" bold>Press ENTER to Start! (Space/Up to Jump)</Text>
+				)}
+				{gameState === 'COUNTDOWN' && (
+					<Box flexDirection="column" alignItems="center">
+						<Text color="yellow" bold>GET READY!</Text>
+						<Text color="cyan" bold>
+							{countdown > 0 ? `Starting in ${countdown}...` : 'GO!'}
+						</Text>
+						<Text dimColor>Press SPACE to jump when obstacles appear</Text>
+					</Box>
 				)}
 				{gameState === 'PLAYING' && (
 					<Text color="gray">Space/Up to Jump • Q to Quit</Text>

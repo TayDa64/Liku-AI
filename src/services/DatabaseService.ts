@@ -24,7 +24,7 @@ export interface PlayerStats {
 
 export interface UserSettings {
     theme: 'default' | 'matrix' | 'cyberpunk' | 'retro';
-    snakeDifficulty: 'easy' | 'medium' | 'hard';
+    snakeDifficulty: 'easy' | 'medium' | 'hard' | 'ai';
 }
 
 export interface ProTokens {

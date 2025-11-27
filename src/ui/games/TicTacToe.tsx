@@ -12,7 +12,7 @@ const WINNING_COMBINATIONS = [
 	[0, 4, 8], [2, 4, 6]             // Diagonals
 ];
 
-const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' }) => {
+const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' | 'ai' }) => {
 	const [board, setBoard] = useState<BoardState>(Array(9).fill(null));
 	const [isPlayerTurn, setIsPlayerTurn] = useState(true); // Player is always X and goes first
 	const [cursor, setCursor] = useState(4); // Start in center

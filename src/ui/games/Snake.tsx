@@ -57,12 +57,13 @@ const Confetti = () => {
 	);
 };
 
-const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' }) => {
+const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' | 'ai' }) => {
 	const getBaseSpeed = (diff: string) => {
 		switch(diff) {
 			case 'easy': return 200;
 			case 'medium': return 150;
 			case 'hard': return 80;
+			case 'ai': return 350; // Slow speed for AI agents to react
 			default: return 150;
 		}
 	};
@@ -78,6 +79,8 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 	const [showConfetti, setShowConfetti] = useState(false);
 	const [message, setMessage] = useState<string | null>(null);
 	const [highScore, setHighScore] = useState(0);
+	const [countdown, setCountdown] = useState<number | null>(difficulty === 'ai' ? 3 : null);
+	const [gameStarted, setGameStarted] = useState(difficulty !== 'ai');  // AI mode waits for countdown
 
 	// Load stats on mount
 	useEffect(() => {
@@ -87,6 +90,22 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 			setXp(stats.xp);
 		}).catch(console.error);
 	}, []);
+
+	// Countdown timer for AI mode
+	useEffect(() => {
+		if (countdown === null || countdown <= 0) return;
+		
+		const timer = setTimeout(() => {
+			if (countdown === 1) {
+				setCountdown(null);
+				setGameStarted(true);
+			} else {
+				setCountdown(countdown - 1);
+			}
+		}, 1000);
+		
+		return () => clearTimeout(timer);
+	}, [countdown]);
 
 	// Reset speed when difficulty changes or restart
 	useEffect(() => {
@@ -175,12 +194,18 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 				setGameOver(false);
 				setFood(generateFood());
 				setShowConfetti(false);
+				// Reset countdown for AI mode
+				if (difficulty === 'ai') {
+					setCountdown(3);
+					setGameStarted(false);
+				}
 			} else if (key.escape || input === 'q') {
 				onExit();
 			}
 			return;
 		}
 
+		// Allow direction changes during countdown so AI can prepare
 		if (key.upArrow && direction.y !== 1) setDirection({ x: 0, y: -1 });
 		if (key.downArrow && direction.y !== -1) setDirection({ x: 0, y: 1 });
 		if (key.leftArrow && direction.x !== 1) setDirection({ x: -1, y: 0 });
@@ -189,7 +214,7 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 	});
 
 	useEffect(() => {
-		if (gameOver) return;
+		if (gameOver || !gameStarted) return;  // Don't move during countdown
 
 		const moveSnake = () => {
 			setSnake(prevSnake => {
@@ -251,7 +276,7 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 
 		const gameLoop = setInterval(moveSnake, speed);
 		return () => clearInterval(gameLoop);
-	}, [direction, food, gameOver, generateFood, speed, generateNanobananaImage, saveProgress, score, level, xp]);
+	}, [direction, food, gameOver, gameStarted, generateFood, speed, generateNanobananaImage, saveProgress, score, level, xp]);
 
 	// --- AI State Logging ---
 	// Force immediate log on mount
@@ -261,7 +286,8 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 
 	useEffect(() => {
 		let status = `Score: ${score} | Level: ${level} | XP: ${xp}/100`;
-		if (gameOver) status += " | GAME OVER";
+		if (countdown !== null) status = `COUNTDOWN: ${countdown}... Get Ready!`;
+		else if (gameOver) status += " | GAME OVER";
 
 		// Render grid for AI
 		let visualState = "";
@@ -298,9 +324,14 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 		if (willHitWall || willHitSelf) {
 			visualState += `\n[DANGER! TURN NOW - will hit ${willHitWall ? 'WALL' : 'SELF'}]`;
 		}
+		
+		// Add countdown info for AI
+		if (countdown !== null) {
+			visualState = `\n*** COUNTDOWN: ${countdown} ***\n\nGame starts in ${countdown} seconds.\nYou can set direction NOW before game begins!\n\n` + visualState;
+		}
 
 		logGameState("Playing Snake", status, visualState);
-	}, [snake, food, score, level, xp, gameOver]);
+	}, [snake, food, score, level, xp, gameOver, direction, countdown]);
 	// ------------------------
 
 	// Render the grid
@@ -331,7 +362,16 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 	return (
 		<Box flexDirection="column" alignItems="center">
 			{showConfetti && <Confetti />}
-			<Box borderStyle="round" borderColor={gameOver ? 'red' : 'green'} padding={0} flexDirection="column">
+			{countdown !== null && (
+				<Box flexDirection="column" alignItems="center" marginBottom={1}>
+					<Text color="yellow" bold>GET READY!</Text>
+					<Text color="cyan" bold>
+						{countdown > 0 ? `Starting in ${countdown}...` : 'GO!'}
+					</Text>
+					<Text dimColor>Set your direction NOW with arrow keys!</Text>
+				</Box>
+			)}
+			<Box borderStyle="round" borderColor={gameOver ? 'red' : countdown ? 'yellow' : 'green'} padding={0} flexDirection="column">
 				{renderGrid()}
 			</Box>
 			<Box marginTop={1} flexDirection="row" gap={2}>
@@ -351,7 +391,7 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 					<Text>Press Enter to Restart, Q to Quit</Text>
 				</Box>
 			)}
-			{!gameOver && (
+			{!gameOver && !countdown && (
 				<Box flexDirection="column" alignItems="center">
 					<Text dimColor>Use Arrow Keys to Move • Q to Quit</Text>
 					<Text dimColor>🍎(10) 🍌(XP) 🌶️(Fast) 🧊(Slow)</Text>

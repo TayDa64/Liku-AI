@@ -55,6 +55,47 @@ For convenience, these scripts exist:
 
 ## 🧠 Gameplay Strategy
 
+### 0. Setting Up AI Mode (RECOMMENDED FOR AI AGENTS)
+
+**FIRST TIME SETUP - CRITICAL FOR REAL-TIME GAMES!**
+
+Real-time games (Snake, Dino Run) normally update every 80-150ms which is TOO FAST for AI agents. The "AI Mode" difficulty provides:
+- **Slower game speed**: Snake = 350ms, DinoRun = 150ms (much more reaction time)
+- **3-second countdown**: Games start with a countdown so you can prepare
+- **Lower spawn rate**: DinoRun spawns obstacles less frequently in AI mode
+
+**How to Enable AI Mode:**
+1. From Main Menu, navigate to `⚙️ Settings` (option 7)
+2. Move to "Game Difficulty" option
+3. Change from easy/medium/hard to `ai`
+4. Press `{ESC}` to return to main menu
+
+**Single Command Setup:**
+```powershell
+# Navigate to Settings (option 7 from main menu)
+# Assuming you're at main menu position 1:
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{ENTER}"; Start-Sleep -ms 200
+# In Settings, difficulty is the 2nd option, cycle to 'ai'
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
+.\send-keys.ps1 -Key "{RIGHT}"; Start-Sleep -ms 150  # easy -> medium
+.\send-keys.ps1 -Key "{RIGHT}"; Start-Sleep -ms 150  # medium -> hard
+.\send-keys.ps1 -Key "{RIGHT}"; Start-Sleep -ms 150  # hard -> ai
+.\send-keys.ps1 -Key "{ESC}"
+```
+
+**Countdown Behavior:**
+- When game starts, you'll see "GET READY!" and a 3-2-1 countdown
+- State file shows: `COUNTDOWN: 3... Get Ready!`
+- Use this time to read the initial state and plan your first move
+- For Snake: Set your initial direction DURING countdown
+- For DinoRun: Get ready to watch for obstacles
+
 ### 1. Game Types & Strategy Modes
 
 Games fall into two categories with DIFFERENT strategies:
@@ -137,7 +178,14 @@ $wshell.SendKeys("{RIGHT}"); Start-Sleep -ms 100; $wshell.SendKeys("{DOWN}")
 - **Vision**: 'H' is your head. 'o' is your body. 'F' is food. State shows Direction and Food Delta.
 - **CRITICAL RULE**: You CANNOT reverse direction. If moving `{UP}`, you cannot press `{DOWN}`. It will kill you.
 
-#### 🧠 MEMORIZED RULES (Don't re-read, just act):
+#### � AI MODE BEHAVIOR (if difficulty='ai'):
+- **Speed**: 350ms per tick (vs 80-150ms for humans)
+- **Countdown**: 3-second countdown before game starts
+- **Strategy**: You can READ the state file after EVERY move now!
+- During countdown: Set your initial direction (e.g., `{RIGHT}` toward food)
+- State shows: `COUNTDOWN: 3... | Direction: UP`
+
+#### �🧠 MEMORIZED RULES (Don't re-read, just act):
 1. **Grid is 20x20** (0-19 on both axes)
 2. **Walls kill** - never let head go < 0 or >= 20
 3. **Tail kills** - never move into your own body
@@ -159,7 +207,14 @@ WHILE playing:
 - **Controls**: `{SPACE}` or `{UP}` to jump.
 - **Vision**: 'D' is you. 'X' is an obstacle. State shows "Next Obstacle: Dist=N".
 
-#### 🧠 MEMORIZED RULES (Don't re-read, just act):
+#### � AI MODE BEHAVIOR (if difficulty='ai'):
+- **Speed**: 150ms per tick (vs 60-100ms for humans)
+- **Countdown**: 3-second countdown before game starts
+- **Spawn Rate**: Obstacles spawn less frequently (0.04 vs 0.1)
+- During countdown: Get ready, obstacles will appear after countdown ends
+- State shows: `COUNTDOWN: 3... Get Ready!`
+
+#### �🧠 MEMORIZED RULES (Don't re-read, just act):
 1. **Dino is at X=52** (right side of 60-wide screen)
 2. **Obstacles spawn at X=0** and move RIGHT toward you
 3. **Ground obstacles (Y=0)**: JUMP when Dist is 3-6

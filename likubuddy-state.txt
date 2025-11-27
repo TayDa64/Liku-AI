@@ -1,12 +1,13 @@
-CURRENT SCREEN: Playing Tic-Tac-Toe
-STATUS: Game Over - You Won
+PROCESS ID: 12508
+CURRENT SCREEN: Games Menu
+STATUS: Level: 12, XP: 120, Hunger: 100%, Energy: 50%, Happiness: 100%
 
-BOARD:
-  X | O | X  
- ---+---+--- 
-  . | X | O  
- ---+---+--- 
- [X]| . | O  
+VISUAL STATE:
+MENU ITEMS:
+  [ ] 🐍 Play Snake (Energy -10, Happiness +10)
+  [ ] ❌⭕ Tic-Tac-Toe (Energy -5, XP/Happy Rewards)
+  [x] 🦖 Dino Run (Energy -10, XP Rewards)
+  [ ] 🔙 Back to Main Menu
 
-CONTROLS: Arrows to move cursor, Enter to place mark. Q to Quit.
-Press Enter to Play Again, Q to Quit.
+
+CONTROLS: Use Arrows to move, Enter to select, Esc/Q to quit.

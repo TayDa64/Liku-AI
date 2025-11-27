@@ -25,9 +25,9 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ onExit, onSettingsChanged }
         },
         { 
             id: 'difficulty', 
-            label: 'Snake Difficulty', 
+            label: 'Game Difficulty', 
             value: settings?.snakeDifficulty, 
-            options: ['easy', 'medium', 'hard'] 
+            options: ['easy', 'medium', 'hard', 'ai'] 
         },
         { id: 'back', label: 'Back to Main Menu' }
     ];
