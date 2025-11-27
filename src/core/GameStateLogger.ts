@@ -17,7 +17,8 @@ export const logGameState = (
 ) => {
     const stateFile = path.join(process.cwd(), 'likubuddy-state.txt');
     
-    let content = `CURRENT SCREEN: ${screenName}\n`;
+    let content = `PROCESS ID: ${process.pid}\n`;
+    content += `CURRENT SCREEN: ${screenName}\n`;
     content += `STATUS: ${status}\n`;
     content += `\nVISUAL STATE:\n`;
     content += `${visualContent}\n`;

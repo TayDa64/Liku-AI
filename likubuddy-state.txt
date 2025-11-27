@@ -1,3 +1,11 @@
-CURRENT SCREEN: Playing: tictactoe
-STATS: Level: 11, XP: 304, Hunger: 70%, Energy: 30%, Happiness: 100%
-(Game or Sub-screen Active - Use specific game controls)
+CURRENT SCREEN: Main Menu
+STATS: Level: 11, XP: 314, Hunger: 75%, Energy: 15%, Happiness: 100%
+MENU ITEMS:
+  [x] 🎮 Let's Play
+  [ ] 🔨 Let's Build a Game! (Open Source SDK)
+  [ ] 🌟 Community Games
+  [ ] 💻 LikuOS Stats
+  [ ] 🍖 Feed Liku (XP -10, Hunger -20)
+  [ ] 💤 Rest (Energy +30, Hunger +10)
+  [ ] ⚙️ Settings
+  [ ] 🚪 Exit
