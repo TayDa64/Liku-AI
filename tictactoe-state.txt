@@ -1,12 +1,11 @@
 CURRENT SCREEN: Playing Tic-Tac-Toe
-STATUS: Game Over - You Won
+STATUS: Your Turn (X)
 
 BOARD:
-  X | O | X  
+  . | . | .  
  ---+---+--- 
-  . | X | O  
+  . |[.]| .  
  ---+---+--- 
- [X]| . | O  
+  . | . | .  
 
 CONTROLS: Arrows to move cursor, Enter to place mark. Q to Quit.
-Press Enter to Play Again, Q to Quit.

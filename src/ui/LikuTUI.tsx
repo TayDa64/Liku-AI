@@ -10,6 +10,7 @@ import BuilderUI from './BuilderUI.js';
 import CommunityGamesMenu from './CommunityGamesMenu.js';
 import LikuOS from './LikuOS.js';
 import { db, PlayerStats, UserSettings, ProTokens } from '../services/DatabaseService.js';
+import { logGameState } from '../core/GameStateLogger.js';
 
 interface GameHubProps {
 	ai?: boolean;
@@ -39,8 +40,6 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 
 	// --- AI State Logging ---
 	useEffect(() => {
-		const stateFile = path.join(process.cwd(), 'likubuddy-state.txt');
-		
 		let screenName = 'Main Menu';
 		if (activeGame === 'games_menu') screenName = 'Games Menu';
 		else if (activeGame === 'settings') screenName = 'Settings';
@@ -53,31 +52,26 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		const currentItems = activeGame === 'games_menu' ? gameMenuItems : mainMenuItems;
 		const currentIdx = activeGame === 'games_menu' ? selectedGameMenuIndex : selectedGame;
 
-		let content = `CURRENT SCREEN: ${screenName}\n`;
-		
+		let status = "";
 		if (stats) {
-			content += `STATS: Level: ${stats.level}, XP: ${stats.xp}, Hunger: ${stats.hunger}%, Energy: ${stats.energy}%, Happiness: ${stats.happiness}%\n`;
+			status = `Level: ${stats.level}, XP: ${stats.xp}, Hunger: ${stats.hunger}%, Energy: ${stats.energy}%, Happiness: ${stats.happiness}%`;
 		}
-		
 		if (message) {
-			content += `MESSAGE: ${message}\n`;
+			status += ` | MESSAGE: ${message}`;
 		}
 
+		let visualState = "";
 		if (isMenu) {
-			content += `MENU ITEMS:\n`;
+			visualState += `MENU ITEMS:\n`;
 			currentItems.forEach((item, idx) => {
 				const selected = idx === currentIdx ? '[x]' : '[ ]';
-				content += `  ${selected} ${item.name}\n`;
+				visualState += `  ${selected} ${item.name}\n`;
 			});
 		} else {
-			content += `(Game or Sub-screen Active - Use specific game controls)\n`;
+			visualState += `(Game or Sub-screen Active - Use specific game controls)\n`;
 		}
 
-		try {
-			fs.writeFileSync(stateFile, content, 'utf-8');
-		} catch (err) {
-			// Ignore write errors to avoid crashing
-		}
+		logGameState(screenName, status, visualState);
 
 	}, [activeGame, selectedGame, selectedGameMenuIndex, stats, message]);
 	// ------------------------
