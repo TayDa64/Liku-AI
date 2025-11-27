@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
+import fs from 'node:fs';
+import path from 'node:path';
 import Snake from './games/Snake.js';
 import TicTacToe from './games/TicTacToe.js';
 import DinoRun from './games/DinoRun.js';
@@ -34,6 +36,51 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		db.getSettings().then(setSettings).catch(console.error);
 		db.getProTokens('me').then(setProTokens).catch(console.error);
 	};
+
+	// --- AI State Logging ---
+	useEffect(() => {
+		const stateFile = path.join(process.cwd(), 'likubuddy-state.txt');
+		
+		let screenName = 'Main Menu';
+		if (activeGame === 'games_menu') screenName = 'Games Menu';
+		else if (activeGame === 'settings') screenName = 'Settings';
+		else if (activeGame === 'builder') screenName = 'Game Builder';
+		else if (activeGame === 'community') screenName = 'Community Games';
+		else if (activeGame === 'liku_os') screenName = 'LikuOS Stats';
+		else if (activeGame) screenName = `Playing: ${activeGame}`;
+
+		const isMenu = !activeGame || activeGame === 'games_menu';
+		const currentItems = activeGame === 'games_menu' ? gameMenuItems : mainMenuItems;
+		const currentIdx = activeGame === 'games_menu' ? selectedGameMenuIndex : selectedGame;
+
+		let content = `CURRENT SCREEN: ${screenName}\n`;
+		
+		if (stats) {
+			content += `STATS: Level: ${stats.level}, XP: ${stats.xp}, Hunger: ${stats.hunger}%, Energy: ${stats.energy}%, Happiness: ${stats.happiness}%\n`;
+		}
+		
+		if (message) {
+			content += `MESSAGE: ${message}\n`;
+		}
+
+		if (isMenu) {
+			content += `MENU ITEMS:\n`;
+			currentItems.forEach((item, idx) => {
+				const selected = idx === currentIdx ? '[x]' : '[ ]';
+				content += `  ${selected} ${item.name}\n`;
+			});
+		} else {
+			content += `(Game or Sub-screen Active - Use specific game controls)\n`;
+		}
+
+		try {
+			fs.writeFileSync(stateFile, content, 'utf-8');
+		} catch (err) {
+			// Ignore write errors to avoid crashing
+		}
+
+	}, [activeGame, selectedGame, selectedGameMenuIndex, stats, message]);
+	// ------------------------
 
 	useEffect(() => {
 		refreshData();

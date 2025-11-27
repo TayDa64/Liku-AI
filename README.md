@@ -164,6 +164,26 @@ If you are an AI agent (like Gemini) trying to play the game, you can use the pr
 
     *Note: These scripts attempt to automatically find the game window (looking for "Liku" or "node"). If they fail, you can pass the Process ID explicitly: `.\down.ps1 -Id 1234`*
 
+3.  **Read the Game State**:
+    The game writes its current state (screen name, stats, menu items) to a file named `likubuddy-state.txt` in the root directory.
+    **ALWAYS read this file** before deciding which key to press. It tells you what is currently selected and if Liku needs attention (e.g., feeding or resting).
+
+    Example `likubuddy-state.txt` content:
+    ```text
+    CURRENT SCREEN: Main Menu
+    STATS: Level: 11, XP: 106, Hunger: 90%, Energy: 15%, Happiness: 80%
+    MESSAGE: Liku is too tired to play! Let him rest first.
+    MENU ITEMS:
+      [ ] 🎮 Let's Play
+      [ ] 🔨 Let's Build a Game!
+      [ ] 🌟 Community Games
+      [ ] 💻 LikuOS Stats
+      [ ] 🍖 Feed Liku (XP -10, Hunger -20)
+      [ ] 💤 Rest (Energy +30, Hunger +10)
+      [ ] ⚙️ Settings
+      [x] 🚪 Exit
+    ```
+
 ## 🛠️ Tech Stack
 
 *   **Runtime**: Node.js
