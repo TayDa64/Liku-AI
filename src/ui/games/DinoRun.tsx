@@ -293,44 +293,67 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 	}, [gameState, difficulty]);
 
 	// --- AI State Logging ---
+	// Force immediate log on mount
+	useEffect(() => {
+		logGameState("Playing DinoRun", "Initializing...", "Press ENTER to start!\nGet ready to jump over obstacles.", "ENTER to start, Q to quit.");
+	}, []);
+
 	useEffect(() => {
 		let status = `Score: ${score} | State: ${gameState}`;
 		if (message) status += ` | Message: ${message}`;
 
-		// Render grid for AI (Simplified ASCII)
 		let visualState = "";
-		// Render from top to bottom (visual Y)
-		for (let y = GAME_HEIGHT - 1; y >= 0; y--) {
-			let row = "";
-			for (let x = 0; x < GAME_WIDTH; x++) {
-				// Dino
-				const visualDinoY = Math.round(dinoY);
-				const isDinoHere = (x === DINO_X) && (y === visualDinoY);
-				
-				// Obstacles
-				const obstacle = obstacles.find(obs => Math.round(obs.x) === x && obs.y === y);
+		let controls = "";
 
-				if (isDinoHere) row += "D";
-				else if (obstacle) row += "X";
-				else if (y === 0) row += "_";
-				else row += ".";
-			}
-			visualState += row + "\n";
-		}
-		
-		// Add specific details for AI decision making
-		const nextObstacle = obstacles
-			.filter(o => o.x > DINO_X)
-			.sort((a, b) => a.x - b.x)[0];
-			
-		if (nextObstacle) {
-			visualState += `\nNext Obstacle: Dist=${Math.round(nextObstacle.x - DINO_X)}, Type=${nextObstacle.type}, Y=${nextObstacle.y}`;
+		if (gameState === 'START') {
+			visualState = "Press ENTER to start the game!\n";
+			visualState += "The dino (D) runs automatically.\n";
+			visualState += "Jump over obstacles (X) to survive.";
+			controls = "ENTER to start, Q/ESC to quit.";
+		} else if (gameState === 'GAME_OVER') {
+			visualState = `Final Score: ${score}\n`;
+			visualState += message || "Game Over!";
+			controls = "ENTER to play again, Q/ESC to quit.";
 		} else {
-			visualState += `\nNext Obstacle: None`;
-		}
-		visualState += `\nDino Y: ${Math.round(dinoY)} | Velocity: ${velocity.toFixed(1)}`;
+			// PLAYING state - Render grid for AI (Simplified ASCII)
+			// Render from top to bottom (visual Y)
+			for (let y = GAME_HEIGHT - 1; y >= 0; y--) {
+				let row = "";
+				for (let x = 0; x < GAME_WIDTH; x++) {
+					// Dino
+					const visualDinoY = Math.round(dinoY);
+					const isDinoHere = (x === DINO_X) && (y === visualDinoY);
+					
+					// Obstacles
+					const obstacle = obstacles.find(obs => Math.round(obs.x) === x && obs.y === y);
 
-		logGameState("Playing DinoRun", status, visualState);
+					if (isDinoHere) row += "D";
+					else if (obstacle) row += "X";
+					else if (y === 0) row += "_";
+					else row += ".";
+				}
+				visualState += row + "\n";
+			}
+			
+			// Add specific details for AI decision making
+			const nextObstacle = obstacles
+				.filter(o => o.x < DINO_X) // Obstacles approach from left
+				.sort((a, b) => b.x - a.x)[0]; // Closest to dino
+				
+			if (nextObstacle) {
+				const dist = DINO_X - Math.round(nextObstacle.x);
+				visualState += `\nNext Obstacle: Dist=${dist}, Type=${nextObstacle.type}, Y=${nextObstacle.y}`;
+				if (dist <= 6 && dist >= 2 && nextObstacle.y === 0) {
+					visualState += " [JUMP NOW!]";
+				}
+			} else {
+				visualState += `\nNext Obstacle: None (safe)`;
+			}
+			visualState += `\nDino Y: ${Math.round(dinoY)} | Velocity: ${velocity.toFixed(1)}`;
+			controls = "SPACE or UP to jump, Q/ESC to quit.";
+		}
+
+		logGameState("Playing DinoRun", status, visualState, controls);
 	}, [dinoY, obstacles, score, gameState, message, velocity]);
 	// ------------------------
 

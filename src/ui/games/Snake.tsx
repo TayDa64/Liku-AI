@@ -254,6 +254,11 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 	}, [direction, food, gameOver, generateFood, speed, generateNanobananaImage, saveProgress, score, level, xp]);
 
 	// --- AI State Logging ---
+	// Force immediate log on mount
+	useEffect(() => {
+		logGameState("Playing Snake", "Initializing...", "Loading game...", "Please wait...");
+	}, []);
+
 	useEffect(() => {
 		let status = `Score: ${score} | Level: ${level} | XP: ${xp}/100`;
 		if (gameOver) status += " | GAME OVER";
@@ -276,6 +281,23 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 		}
 		visualState += `\nSnake Head: (${snake[0].x}, ${snake[0].y})`;
 		visualState += `\nFood: (${food.x}, ${food.y}) [${food.type}]`;
+		
+		// Add current direction for AI memory
+		const dirName = direction.y === -1 ? "UP" : direction.y === 1 ? "DOWN" : direction.x === -1 ? "LEFT" : "RIGHT";
+		visualState += `\nDirection: ${dirName}`;
+		
+		// Calculate distance and direction to food
+		const dx = food.x - snake[0].x;
+		const dy = food.y - snake[0].y;
+		visualState += `\nFood Delta: dx=${dx}, dy=${dy}`;
+		
+		// Danger warnings
+		const nextHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
+		const willHitWall = nextHead.x < 0 || nextHead.x >= 20 || nextHead.y < 0 || nextHead.y >= 20;
+		const willHitSelf = snake.some(s => s.x === nextHead.x && s.y === nextHead.y);
+		if (willHitWall || willHitSelf) {
+			visualState += `\n[DANGER! TURN NOW - will hit ${willHitWall ? 'WALL' : 'SELF'}]`;
+		}
 
 		logGameState("Playing Snake", status, visualState);
 	}, [snake, food, score, level, xp, gameOver]);

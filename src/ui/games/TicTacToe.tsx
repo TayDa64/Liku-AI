@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Box, Text, useInput } from 'ink';
-import fs from 'node:fs';
-import path from 'node:path';
 import { db } from '../../services/DatabaseService.js';
+import { logGameState } from '../../core/GameStateLogger.js';
 
 type Player = 'X' | 'O' | null;
 type BoardState = Player[];
@@ -136,33 +135,38 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 	}, [isPlayerTurn, winner, likuMove]);
 
 	// --- AI State Logging ---
+	// Force immediate log on mount
 	useEffect(() => {
-		const stateFile = path.join(process.cwd(), 'likubuddy-state.txt');
+		logGameState("Playing Tic-Tac-Toe", "Initializing...", "Loading game board...", "Please wait...");
+	}, []);
+
+	useEffect(() => {
+		const status = winner 
+			? (winner === 'DRAW' ? 'Game Over - Draw' : `Game Over - ${winner === 'X' ? 'You' : 'Liku'} Won`)
+			: (isPlayerTurn ? 'Your Turn (X)' : 'Liku is thinking... (O)');
 		
-		let content = `CURRENT SCREEN: Playing Tic-Tac-Toe\n`;
-		content += `STATUS: ${winner ? (winner === 'DRAW' ? 'Game Over - Draw' : `Game Over - ${winner === 'X' ? 'You' : 'Liku'} Won`) : (isPlayerTurn ? 'Your Turn (X)' : 'Liku is thinking... (O)')}\n`;
-		
-		content += `\nBOARD:\n`;
 		// Render board as a grid for the AI to "see"
+		let visualState = "";
 		for (let i = 0; i < 3; i++) {
 			const row = board.slice(i * 3, i * 3 + 3).map((cell, idx) => {
 				const cellIndex = i * 3 + idx;
 				const cellChar = cell || '.';
-				// Mark cursor position
+				// Mark cursor position with brackets
 				return cursor === cellIndex ? `[${cellChar}]` : ` ${cellChar} `;
 			}).join('|');
-			content += ` ${row} \n`;
-			if (i < 2) content += ` ---+---+--- \n`;
+			visualState += ` ${row} \n`;
+			if (i < 2) visualState += ` ---+---+--- \n`;
 		}
+		
+		// Add cell index reference for AI navigation
+		visualState += `\nCursor Position: ${cursor} (Row ${Math.floor(cursor/3)}, Col ${cursor%3})`;
+		visualState += `\nBoard Indices:\n 0 | 1 | 2 \n 3 | 4 | 5 \n 6 | 7 | 8`;
 
-		content += `\nCONTROLS: Arrows to move cursor, Enter to place mark. Q to Quit.\n`;
-		if (winner) content += `Press Enter to Play Again, Q to Quit.\n`;
+		const controls = winner 
+			? "Enter to Play Again, Q to Quit."
+			: "Arrows to move cursor, Enter to place X. Q to Quit.";
 
-		try {
-			fs.writeFileSync(stateFile, content, 'utf-8');
-		} catch (err) {
-			// Ignore write errors
-		}
+		logGameState("Playing Tic-Tac-Toe", status, visualState, controls);
 	}, [board, cursor, isPlayerTurn, winner]);
 	// ------------------------
 

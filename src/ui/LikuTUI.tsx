@@ -40,6 +40,12 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 
 	// --- AI State Logging ---
 	useEffect(() => {
+		// Don't log from LikuTUI when an actual game is active - the game component handles its own logging
+		const gameComponents = ['snake', 'tictactoe', 'dinorun'];
+		if (activeGame && gameComponents.includes(activeGame)) {
+			return; // Let the game component handle logging
+		}
+
 		let screenName = 'Main Menu';
 		if (activeGame === 'games_menu') screenName = 'Games Menu';
 		else if (activeGame === 'settings') screenName = 'Settings';
@@ -110,6 +116,12 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 			setSelection(prev => Math.min(items.length - 1, prev + 1));
 		} else if (command === 'enter') {
 			handleAction(items[currentSelection].id);
+		} else if (command === 'feed' && !activeGame) {
+			// Direct shortcut for AI
+			handleAction('feed');
+		} else if (command === 'rest' && !activeGame) {
+			// Direct shortcut for AI
+			handleAction('rest');
 		}
 	};
 
