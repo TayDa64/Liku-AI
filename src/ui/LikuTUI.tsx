@@ -23,6 +23,15 @@ interface GameHubProps {
 
 const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQueue }) => {
 	const { exit } = useApp();
+	const { stdout } = useStdout();
+
+	// Get terminal dimensions for responsive layout (must be before any early returns)
+	const terminalWidth = useMemo(() => {
+		return stdout?.columns || 120;
+	}, [stdout?.columns]);
+	
+	// Clamp width to prevent overflow (Gemini CLI pattern)
+	const maxWidth = Math.min(terminalWidth - 2, 130);
 
 	const [selectedGame, setSelectedGame] = useState<number>(0);
 	const [selectedGameMenuIndex, setSelectedGameMenuIndex] = useState<number>(0);
@@ -343,15 +352,6 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 	const isGameMenu = activeGame === 'games_menu';
 	const currentMenuItems = isGameMenu ? gameMenuItems : mainMenuItems;
 	const currentSelection = isGameMenu ? selectedGameMenuIndex : selectedGame;
-
-	// Get terminal dimensions for responsive layout
-	const { stdout } = useStdout();
-	const terminalWidth = useMemo(() => {
-		return stdout?.columns || 120;
-	}, [stdout?.columns]);
-	
-	// Clamp width to prevent overflow (Gemini CLI pattern)
-	const maxWidth = Math.min(terminalWidth - 2, 130);
 
 	if (miniDashboardMode && !activeGame) {
 		return (

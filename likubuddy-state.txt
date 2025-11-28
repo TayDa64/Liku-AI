@@ -1,17 +1,9 @@
-PROCESS ID: 29276
-CURRENT SCREEN: Main Menu
+PROCESS ID: 30428
+CURRENT SCREEN: Playing: hangman
 STATUS: Level: 12, XP: 302, Hunger: 100%, Energy: 95%, Happiness: 100%
 
 VISUAL STATE:
-MENU ITEMS:
-  [x] 🎮 Let's Play
-  [ ] 🔨 Let's Build a Game! (Open Source SDK)
-  [ ] 🌟 Community Games
-  [ ] 💻 LikuOS Stats
-  [ ] 🍖 Feed Liku (XP -10, Hunger -20)
-  [ ] 💤 Rest (Energy +30, Hunger +10)
-  [ ] ⚙️ Settings
-  [ ] 🚪 Exit
+(Game or Sub-screen Active - Use specific game controls)
 
 
 CONTROLS: Use Arrows to move, Enter to select, Esc/Q to quit.
