@@ -1,12 +1,25 @@
 import fs from 'fs/promises';
 import path from 'path';
 import { db } from '../services/DatabaseService.js';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
+import { build, transform } from 'esbuild';
+import os from 'os';
+import React, { lazy, Suspense, ComponentType } from 'react';
+import { Box, Text } from 'ink';
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+// Type for loaded game components
+export interface LoadedGame {
+  Component: ComponentType<{ onExit: () => void; difficulty?: string }>;
+  metadata: { id: string; name: string; description: string };
+}
+
+// Cache for performance - avoids re-bundling on repeat plays
+const gameCache = new Map<string, LoadedGame>();
 
 export interface GameInstallResult {
   success: boolean;
@@ -34,8 +47,8 @@ export class GameLoader {
       // Ensure community games directory exists
       await fs.mkdir(this.gamesDir, { recursive: true });
 
-      // Generate file name
-      const fileName = `${meta.id}.tsx`;
+      // Generate file name - save as .js since we transpile TSX to JS
+      const fileName = `${meta.id}.js`;
       const filePath = path.join(this.gamesDir, fileName);
 
       // Check if game already exists
@@ -48,8 +61,40 @@ export class GameLoader {
         };
       }
 
-      // Write the game code to file
-      await fs.writeFile(filePath, code, 'utf-8');
+      // Transpile and bundle TSX to JS using esbuild
+      // Use bundle mode with external dependencies to ensure proper module resolution
+      const tempInputFile = path.join(os.tmpdir(), `liku-game-${meta.id}-input.tsx`);
+      
+      // Strip out any internal imports that shouldn't be in community games
+      // These are internal modules that the AI might incorrectly include
+      const cleanedCode = code
+        .replace(/import.*GameStateLogger.*\n?/g, '')
+        .replace(/import.*logGameState.*\n?/g, '')
+        .replace(/logGameState\([^)]*\);?\n?/g, '');
+      
+      await fs.writeFile(tempInputFile, cleanedCode, 'utf-8');
+
+      await build({
+        entryPoints: [tempInputFile],
+        outfile: filePath,
+        bundle: true,
+        format: 'esm',
+        platform: 'node',
+        target: 'node20',
+        jsx: 'automatic',
+        jsxImportSource: 'react',
+        // Mark dependencies as external so they use the parent's instances
+        external: [
+          'react', 
+          'react/jsx-runtime', 
+          'ink',
+          '*/services/DatabaseService.js',
+          '*/core/GameStateLogger.js',  // In case any slip through
+        ],
+      });
+
+      // Clean up temp file
+      await fs.unlink(tempInputFile).catch(() => {});
 
       // Register in database
       await db.registerGame({
@@ -78,9 +123,16 @@ export class GameLoader {
   }
 
   /**
-   * Load a game dynamically by ID
+   * Load a game dynamically by ID using React.lazy for tree integration
+   * This approach bundles in-memory and uses Function constructor with
+   * injected dependencies to ensure React context sharing
    */
-  async loadGame(gameId: string): Promise<any> {
+  async loadGame(gameId: string): Promise<LoadedGame> {
+    // Return cached game if available
+    if (gameCache.has(gameId)) {
+      return gameCache.get(gameId)!;
+    }
+
     try {
       const game = await db.getGameById(gameId);
       if (!game) {
@@ -96,12 +148,104 @@ export class GameLoader {
         throw new Error(`Game file not found: ${game.filePath}`);
       }
 
-      // Dynamically import the game module
-      const gameModule = await import(gamePath);
-      return gameModule.default || gameModule;
+      // Read the bundled JS code
+      const bundledCode = await fs.readFile(gamePath, 'utf-8');
+
+      // Transform ESM to a format we can evaluate with shared dependencies
+      // Use CJS format so we can inject require() with our shared modules
+      const cjsResult = await transform(bundledCode, {
+        format: 'cjs',
+        target: 'node20',
+      });
+
+      // Create a module factory that injects shared React/Ink instances
+      // This prevents the duplicate React context issue
+      const createComponent = (): ComponentType<any> => {
+        const moduleExports: any = {};
+        const moduleObj = { exports: moduleExports };
+        
+        // Custom require that returns our shared instances
+        const sharedRequire = (id: string): any => {
+          if (id === 'react' || id === 'react/jsx-runtime') {
+            return require('react');
+          }
+          if (id === 'ink') {
+            return require('ink');
+          }
+          if (id.includes('DatabaseService')) {
+            return { db };
+          }
+          // Fallback for other modules
+          return require(id);
+        };
+
+        try {
+          // Execute the bundled code with our injected dependencies
+          const factory = new Function(
+            'module',
+            'exports', 
+            'require',
+            '__filename',
+            '__dirname',
+            cjsResult.code
+          );
+          factory(moduleObj, moduleExports, sharedRequire, gamePath, this.gamesDir);
+        } catch (evalError) {
+          console.error(`Failed to evaluate game code for ${gameId}:`, evalError);
+          throw evalError;
+        }
+
+        return moduleObj.exports.default || moduleObj.exports;
+      };
+
+      // Use React.lazy for proper tree integration with Suspense fallback
+      const LazyComponent = lazy(() => 
+        Promise.resolve({ default: createComponent() })
+      );
+
+      // Wrap in Suspense with loading indicator
+      const WrappedComponent: ComponentType<{ onExit: () => void; difficulty?: string }> = (props) => {
+        // Defensive props handling (Claude's suggestion)
+        const safeProps = props || {};
+        return React.createElement(
+          Suspense,
+          { 
+            fallback: React.createElement(
+              Box, 
+              { flexDirection: 'column', alignItems: 'center', padding: 1 },
+              React.createElement(Text, { color: 'yellow' }, `⏳ Loading ${game.name}...`)
+            )
+          },
+          React.createElement(LazyComponent, safeProps)
+        );
+      };
+
+      const loaded: LoadedGame = {
+        Component: WrappedComponent,
+        metadata: {
+          id: game.id,
+          name: game.name,
+          description: game.description || 'No description',
+        },
+      };
+
+      // Cache for future loads
+      gameCache.set(gameId, loaded);
+      return loaded;
     } catch (error) {
       console.error(`Error loading game '${gameId}':`, error);
       throw error;
+    }
+  }
+
+  /**
+   * Clear the game cache (useful when themes change or for debugging)
+   */
+  clearCache(gameId?: string): void {
+    if (gameId) {
+      gameCache.delete(gameId);
+    } else {
+      gameCache.clear();
     }
   }
 

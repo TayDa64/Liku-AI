@@ -5,12 +5,14 @@ import path from 'node:path';
 import Snake from './games/Snake.js';
 import TicTacToe from './games/TicTacToe.js';
 import DinoRun from './games/DinoRun.js';
+import Hangman from './games/Hangman.js';
 import SettingsMenu from './SettingsMenu.js';
 import BuilderUI from './BuilderUI.js';
 import CommunityGamesMenu from './CommunityGamesMenu.js';
 import LikuOS from './LikuOS.js';
 import { db, PlayerStats, UserSettings, ProTokens } from '../services/DatabaseService.js';
 import { logGameState } from '../core/GameStateLogger.js';
+import type { LoadedGame } from '../core/GameLoader.js';
 
 interface GameHubProps {
 	ai?: boolean;
@@ -28,7 +30,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 	const [settings, setSettings] = useState<UserSettings | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
 	const [proTokens, setProTokens] = useState<ProTokens | null>(null);
-	const [communityGameComponent, setCommunityGameComponent] = useState<any>(null);
+	const [loadedCommunityGame, setLoadedCommunityGame] = useState<LoadedGame | null>(null);
 	const [showLikuOS, setShowLikuOS] = useState(false);
 	const [miniDashboardMode, setMiniDashboardMode] = useState(false);
 
@@ -101,6 +103,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		{ id: 'snake', name: '🐍 Play Snake (Energy -10, Happiness +10)' },
 		{ id: 'tictactoe', name: '❌⭕ Tic-Tac-Toe (Energy -5, XP/Happy Rewards)' },
 		{ id: 'dinorun', name: '🦖 Dino Run (Energy -10, XP Rewards)' },
+		{ id: 'hangman', name: '📝 Hangman (Energy -5, XP Rewards)' },
 		{ id: 'back', name: '🔙 Back to Main Menu' }
 	];
 
@@ -166,6 +169,13 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 				return;
 			}
 			setActiveGame('dinorun');
+		} else if (id === 'hangman') {
+			if (stats.energy < 5) {
+				setMessage("Liku is too tired to play! Let him rest first.");
+				setTimeout(() => setMessage(null), 3000);
+				return;
+			}
+			setActiveGame('hangman');
 		} else if (id === 'feed') {
 			if (stats.xp < 10) {
 				setMessage("Not enough XP to buy food! Play games to earn XP.");
@@ -245,6 +255,10 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		return <DinoRun onExit={() => setActiveGame('games_menu')} difficulty={settings?.snakeDifficulty} />;
 	}
 
+	if (activeGame === 'hangman') {
+		return <Hangman onExit={() => setActiveGame('games_menu')} />;
+	}
+
 	if (activeGame === 'settings') {
 		return <SettingsMenu onExit={() => setActiveGame(null)} onSettingsChanged={refreshData} />;
 	}
@@ -257,25 +271,28 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		return (
 			<CommunityGamesMenu
 				onExit={() => setActiveGame(null)}
-				onSelectGame={(gameId, GameComponent) => {
-					setCommunityGameComponent(GameComponent);
+				onSelectGame={(gameId, loadedGame) => {
+					setLoadedCommunityGame(loadedGame);
 					setActiveGame('community_game_playing');
 				}}
 			/>
 		);
 	}
 
-	if (activeGame === 'community_game_playing' && communityGameComponent) {
-		const CommunityGame = communityGameComponent;
+	if (activeGame === 'community_game_playing' && loadedCommunityGame) {
+		// Use the wrapped component from LoadedGame - includes Suspense and safe props
+		const { Component: CommunityGame, metadata } = loadedCommunityGame;
 		return (
-			<CommunityGame
-				onExit={() => {
-					setActiveGame('community');
-					setCommunityGameComponent(null);
-					refreshData();
-				}}
-				difficulty={settings?.snakeDifficulty}
-			/>
+			<Box flexDirection="column">
+				<CommunityGame
+					onExit={() => {
+						setActiveGame('community');
+						setLoadedCommunityGame(null);
+						refreshData();
+					}}
+					difficulty={settings?.snakeDifficulty}
+				/>
+			</Box>
 		);
 	}
 

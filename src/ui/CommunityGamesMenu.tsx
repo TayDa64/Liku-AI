@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { gameLoader } from '../core/GameLoader.js';
+import { gameLoader, LoadedGame } from '../core/GameLoader.js';
 import { logGameState } from '../core/GameStateLogger.js';
 
 interface CommunityGamesMenuProps {
   onExit: () => void;
-  onSelectGame: (gameId: string, GameComponent: any) => void;
+  onSelectGame: (gameId: string, loadedGame: LoadedGame) => void;
 }
 
 const CommunityGamesMenu: React.FC<CommunityGamesMenuProps> = ({ onExit, onSelectGame }) => {
@@ -82,8 +82,8 @@ const CommunityGamesMenu: React.FC<CommunityGamesMenuProps> = ({ onExit, onSelec
   const handlePlayGame = async (gameId: string) => {
     try {
       setLoadingGame(true);
-      const GameComponent = await gameLoader.loadGame(gameId);
-      onSelectGame(gameId, GameComponent);
+      const loadedGame = await gameLoader.loadGame(gameId);
+      onSelectGame(gameId, loadedGame);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load game');
       setLoadingGame(false);

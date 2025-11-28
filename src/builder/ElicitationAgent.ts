@@ -29,9 +29,8 @@ GAME STRUCTURE REQUIREMENTS:
    - onExit: () => void (callback to return to menu)
    - difficulty?: 'easy' | 'medium' | 'hard'
 3. Games should use Ink components: Box, Text, useInput, useApp
-4. Games can access the database through the global db service
-5. Use ASCII art for graphics (no external graphics libraries)
-6. Games MUST implement state logging for AI visibility using the provided helper.
+4. Use ASCII art for graphics (no external graphics libraries)
+5. Keep games self-contained - do NOT import from internal paths like '../../core/' or '../../services/'
 
 GAME MANIFEST (optional export):
 export const GameManifest = {
@@ -46,7 +45,6 @@ EXAMPLE GAME STRUCTURE:
 \`\`\`typescript
 import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
-import { logGameState } from '../../core/GameStateLogger.js'; // REQUIRED IMPORT
 
 interface GameProps {
   onExit: () => void;
@@ -68,19 +66,12 @@ const MyGame = ({ onExit, difficulty = 'medium' }: GameProps) => {
     // Game loop logic
   }, []);
 
-  // REQUIRED: AI State Logging
-  useEffect(() => {
-    const status = \`Score: \${score} | Game Over: \${gameOver}\`;
-    // Create a visual representation of the game state (ASCII grid, etc.)
-    const visualState = "ASCII Representation of Game Board Here"; 
-    logGameState("My Game Name", status, visualState);
-  }, [score, gameOver]);
-
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="cyan">
       <Text bold>My Game</Text>
       <Text>Score: {score}</Text>
       {gameOver && <Text color="red">Game Over!</Text>}
+      <Text dimColor>Press Esc to exit</Text>
     </Box>
   );
 };
@@ -91,9 +82,10 @@ export default MyGame;
 IMPORTANT:
 - Output ONLY valid TypeScript code in a single code block
 - Do not include explanations outside the code block
-- Ensure all imports are from 'react', 'ink', and local services
+- Only import from 'react' and 'ink' - NO other imports
 - Use proper TypeScript types
 - Keep games simple and focused on gameplay
+- Games should be fully self-contained with no external dependencies
 `;
 
 export interface ElicitationSession {
@@ -237,10 +229,10 @@ Respond with ONLY the TypeScript code wrapped in a code block. No explanations.`
     // Self-critique: Best practice for improved code quality
     const critiquePrompt = `Review the generated code for:
 1. Missing useInput escape handler for onExit
-2. Missing logGameState import and usage
-3. TypeScript type errors
-4. Ink component best practices
-5. Game playability issues
+2. TypeScript type errors
+3. Ink component best practices
+4. Game playability issues
+5. REMOVE any imports from internal paths like '../../core/' or '../../services/' - games must be self-contained
 
 If issues found, output corrected code. Otherwise, output the same code.
 Respond with ONLY the TypeScript code wrapped in a code block.
@@ -269,13 +261,9 @@ ${responseText}`;
   async quickGenerate(
     gameIdea: string
   ): Promise<{ code: string; gameId: string; name: string; description: string }> {
-    // For built-in games, bypass AI and return hardcoded implementations
+    // For built-in games, inform user they're already available
     if (gameIdea.toLowerCase().includes('hangman')) {
-      const gameId = 'hangman';
-      const name = 'Hangman';
-      const description = 'Guess the word before you run out of attempts!';
-      const code = this.getHangmanCode();
-      return { gameId, name, description, code };
+      throw new Error('Hangman is already available as a built-in game! Go to "Let\'s Play" to play it.');
     }
 
     // If not a built-in game and AI is not configured, throw error
@@ -291,7 +279,7 @@ ${responseText}`;
         },
         {
           role: 'model',
-          parts: [{ text: 'I understand. I will generate LikuBuddy games following the SDK contract.' }]
+          parts: [{ text: 'I understand. I will generate LikuBuddy games following the SDK contract. I will only import from react and ink, no internal paths.' }]
         }
       ]
     });
@@ -317,9 +305,10 @@ Respond with ONLY the TypeScript code wrapped in a code block.`;
     const critiquePrompt = `Critique this code for Ink 5.x/SDK compliance and playability. 
 Check for:
 - Proper useInput with escape → onExit
-- logGameState usage for AI state logging
 - TypeScript strict mode compatibility
 - Proper Box/Text component usage
+- REMOVE any imports from '../../core/' or '../../services/' paths - games must be self-contained
+- Only allow imports from 'react' and 'ink'
 
 If issues found, output corrected code. Otherwise, output the same code.
 Respond with ONLY the TypeScript code wrapped in a code block.
@@ -402,202 +391,4 @@ ${responseText}`;
     // Use first few words of fallback
     return fallback.split(' ').slice(0, 4).join(' ');
   }
-
-  private getHangmanCode(): string {
-    return `
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useInput } from 'ink';
-import { db } from '../../services/DatabaseService.js';
-import { logGameState } from '../../core/GameStateLogger.js';
-
-interface HangmanProps {
-    onExit: () => void;
 }
-
-const HANGMAN_PICS = [
-\`
-  +---+
-  |   |
-      |
-      |
-      |
-      |
-=========\`,
-\`
-  +---+
-  |   |
-  O   |
-      |
-      |
-      |
-=========\`,
-\`
-  +---+
-  |   |
-  O   |
-  |   |
-      |
-      |
-=========\`,
-\`
-  +---+
-  |   |
-  O   |
- /|   |
-      |
-      |
-=========\`,
-\`
-  +---+
-  |   |
-  O   |
- /|\  |
-      |
-      |
-=========\`,
-\`
-  +---+
-  |   |
-  O   |
- /|\  |
- /    |
-      |
-=========\`,
-\`
-  +---+
-  |   |
-  O   |
- /|\  |
- / \  |
-      |
-=========\`
-];
-
-const Hangman: React.FC<HangmanProps> = ({ onExit }) => {
-    const [word, setWord] = useState('');
-    const [guessedLetters, setGuessedLetters] = useState<string[]>([]);
-    const [wrongGuesses, setWrongGuesses] = useState(0);
-    const [gameState, setGameState] = useState<'playing' | 'won' | 'lost'>('playing');
-
-    const startNewGame = async () => {
-        const newWord = await db.getRandomHangmanWord();
-        setWord(newWord.toUpperCase());
-        setGuessedLetters([]);
-        setWrongGuesses(0);
-        setGameState('playing');
-    };
-
-    useEffect(() => {
-        startNewGame();
-    }, []);
-
-    const handleGuess = (letter: string) => {
-        if (gameState !== 'playing' || guessedLetters.includes(letter)) {
-            return;
-        }
-
-        setGuessedLetters(prev => [...prev, letter]);
-
-        if (!word.includes(letter)) {
-            setWrongGuesses(prev => prev + 1);
-        }
-    };
-
-    useInput((input, key) => {
-        if (gameState !== 'playing') {
-            if (key.return) {
-                startNewGame();
-            } else if (key.escape) {
-                onExit();
-            }
-            return;
-        }
-
-        if (input && /^[a-zA-Z]$/.test(input)) {
-            handleGuess(input.toUpperCase());
-        } else if (key.escape) {
-            onExit();
-        }
-    });
-
-    useEffect(() => {
-        if (!word) return;
-
-        const wordGuessed = word.split('').every(letter => guessedLetters.includes(letter));
-        if (wordGuessed) {
-            setGameState('won');
-            db.getStats().then(stats => {
-                db.updateStats({ hangman_wins: stats.hangman_wins + 1, xp: stats.xp + 25 });
-            });
-        } else if (wrongGuesses >= HANGMAN_PICS.length - 1) {
-            setGameState('lost');
-            db.getStats().then(stats => {
-                db.updateStats({ hangman_losses: stats.hangman_losses + 1 });
-            });
-        }
-    }, [guessedLetters, wrongGuesses, word]);
-
-    // AI State Logging
-    useEffect(() => {
-        const displayedWord = word
-            .split('')
-            .map(letter => (guessedLetters.includes(letter) ? letter : '_'))
-            .join(' ');
-            
-        const status = \`State: \${gameState} | Wrong Guesses: \${wrongGuesses}/6\`;
-        const visualState = \`Word: \${displayedWord}\\nGuessed: \${guessedLetters.join(',')}\\n\${HANGMAN_PICS[wrongGuesses]}\`;
-        
-        logGameState("Playing Hangman", status, visualState);
-    }, [word, guessedLetters, wrongGuesses, gameState]);
-
-    const displayedWord = word
-        .split('')
-        .map(letter => (guessedLetters.includes(letter) ? letter : '_'))
-        .join(' ');
-
-    return (
-        <Box flexDirection="column" alignItems="center">
-            <Box marginBottom={1}>
-                <Text bold color="yellow">H A N G M A N</Text>
-            </Box>
-
-            <Box>
-                <Text>{HANGMAN_PICS[wrongGuesses]}</Text>
-            </Box>
-
-            <Box marginTop={1}>
-                <Text bold fontSize={2} color="cyan">{displayedWord}</Text>
-            </Box>
-
-            <Box marginTop={1}>
-                <Text>Guessed: {guessedLetters.join(', ')}</Text>
-            </Box>
-
-            {gameState === 'playing' && (
-                <Box marginTop={1}>
-                    <Text dimColor>Type a letter to guess. Press Esc to quit.</Text>
-                </Box>
-            )}
-
-            {gameState === 'won' && (
-                <Box marginTop={1} flexDirection="column" alignItems="center">
-                    <Text color="green" bold>You won! (+25 XP)</Text>
-                    <Text dimColor>Press Enter to play again, or Esc to exit.</Text>
-                </Box>
-            )}
-
-            {gameState === 'lost' && (
-                <Box marginTop={1} flexDirection="column" alignItems="center">
-                    <Text color="red" bold>You lost!</Text>
-                    <Text>The word was: <Text bold>{word}</Text></Text>
-                    <Text dimColor>Press Enter to play again, or Esc to exit.</Text>
-                </Box>
-            )}
-        </Box>
-    );
-};
-
-export default Hangman;
-    `;
-  }
-  }
