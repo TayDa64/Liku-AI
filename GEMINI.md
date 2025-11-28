@@ -70,24 +70,35 @@ Real-time games (Snake, Dino Run) normally update every 80-150ms which is TOO FA
 3. Change from easy/medium/hard to `ai`
 4. Press `{ESC}` to return to main menu
 
-**Single Command Setup:**
+**Optimized Single-Command Setup:**
 ```powershell
-# Navigate to Settings (option 7 from main menu)
-# Assuming you're at main menu position 1:
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{ENTER}"; Start-Sleep -ms 200
-# In Settings, difficulty is the 2nd option, cycle to 'ai'
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 150
-.\send-keys.ps1 -Key "{RIGHT}"; Start-Sleep -ms 150  # easy -> medium
-.\send-keys.ps1 -Key "{RIGHT}"; Start-Sleep -ms 150  # medium -> hard
-.\send-keys.ps1 -Key "{RIGHT}"; Start-Sleep -ms 150  # hard -> ai
-.\send-keys.ps1 -Key "{ESC}"
+# Fast batch key sending - no sleeps needed for menu navigation
+$wshell = New-Object -ComObject WScript.Shell
+$wshell.AppActivate('LikuBuddy Game Window')
+# Navigate to Settings (6 downs from top) + Enter
+$wshell.SendKeys("{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}")
+Start-Sleep -ms 300  # Wait for Settings screen to load
+# Move to Difficulty (1 down), cycle to 'ai' (3 rights), exit
+$wshell.SendKeys("{DOWN}{RIGHT}{RIGHT}{RIGHT}{ESC}")
 ```
+
+**Poll-Based Verification (Recommended):**
+Instead of blind sleeps, verify the setting was applied:
+```powershell
+# After setup, poll state file to confirm
+$state = Get-Content .\likubuddy-state.txt -Raw
+if ($state -match "Game Difficulty \[ai\]") { 
+    Write-Host "AI Mode enabled!" 
+} else { 
+    Write-Host "Retry setup..." 
+}
+```
+
+**AI Agent Strategy:**
+- Use background terminal execution with `isBackground=true`
+- Poll `likubuddy-state.txt` to detect state changes instead of fixed waits
+- Chain navigation keys without delays - the TUI handles rapid input
+- Only add delays when waiting for screen transitions (e.g., entering a submenu)
 
 **Countdown Behavior:**
 - When game starts, you'll see "GET READY!" and a 3-2-1 countdown
@@ -119,25 +130,29 @@ Use **Memory-Based Reactive Play**:
 **Why?** Real-time games update every 80-150ms. Reading the file after every action is too slow. Trust your memory and pattern recognition.
 
 ### 2. Multi-Key Sequences (Navigation Optimization)
-When navigating menus or boards, you can chain multiple commands:
+Chain menu navigation keys without delays - the TUI handles rapid input:
 ```powershell
-# Example: Move from position 3 to position 4 (one right)
 $wshell = New-Object -ComObject WScript.Shell
 $wshell.AppActivate('LikuBuddy Game Window')
-Start-Sleep -Milliseconds 100
-$wshell.SendKeys("{RIGHT}")
+# Send all navigation keys at once
+$wshell.SendKeys("{DOWN}{DOWN}{DOWN}{ENTER}")
 ```
 
-For multi-step navigation:
+**Poll Instead of Sleep:**
 ```powershell
-# Move right twice, then down, then select
-$wshell = New-Object -ComObject WScript.Shell
-$wshell.AppActivate('LikuBuddy Game Window')
-$wshell.SendKeys("{RIGHT}"); Start-Sleep -Milliseconds 100
-$wshell.SendKeys("{RIGHT}"); Start-Sleep -Milliseconds 100
-$wshell.SendKeys("{DOWN}"); Start-Sleep -Milliseconds 100
-$wshell.SendKeys("{ENTER}")
+# Instead of: Start-Sleep -ms 500
+# Do this - poll until state changes:
+$target = "Playing Snake"
+do {
+    Start-Sleep -ms 50
+    $state = Get-Content .\likubuddy-state.txt -Raw
+} while ($state -notmatch $target)
 ```
+
+**When Sleeps ARE Needed:**
+- After `{ENTER}` that loads a new screen (use 200-300ms or poll)
+- During real-time gameplay tick synchronization
+- NOT between arrow key presses in menus
 
 ### 3. Troubleshooting
 - **"Could not activate game window"**: Ensure the game is actually running (`npm start`).
@@ -181,9 +196,25 @@ $wshell.SendKeys("{RIGHT}"); Start-Sleep -ms 100; $wshell.SendKeys("{DOWN}")
 #### � AI MODE BEHAVIOR (if difficulty='ai'):
 - **Speed**: 350ms per tick (vs 80-150ms for humans)
 - **Countdown**: 3-second countdown before game starts
-- **Strategy**: You can READ the state file after EVERY move now!
-- During countdown: Set your initial direction (e.g., `{RIGHT}` toward food)
+- **Strategy**: Poll state file every ~100ms, react immediately
+- During countdown: Set your initial direction toward food
 - State shows: `COUNTDOWN: 3... | Direction: UP`
+
+**Optimized AI Snake Loop:**
+```powershell
+$wshell = New-Object -ComObject WScript.Shell
+while ($true) {
+    $state = Get-Content .\likubuddy-state.txt -Raw
+    if ($state -match "GAME OVER") { break }
+    if ($state -match "DANGER") {
+        $wshell.AppActivate('LikuBuddy Game Window')
+        # Turn perpendicular based on current direction
+        if ($state -match "Direction: (UP|DOWN)") { $wshell.SendKeys("{LEFT}") }
+        else { $wshell.SendKeys("{UP}") }
+    }
+    Start-Sleep -ms 100  # Poll rate
+}
+```
 
 #### �🧠 MEMORIZED RULES (Don't re-read, just act):
 1. **Grid is 20x20** (0-19 on both axes)
@@ -211,8 +242,27 @@ WHILE playing:
 - **Speed**: 150ms per tick (vs 60-100ms for humans)
 - **Countdown**: 3-second countdown before game starts
 - **Spawn Rate**: Obstacles spawn less frequently (0.04 vs 0.1)
-- During countdown: Get ready, obstacles will appear after countdown ends
 - State shows: `COUNTDOWN: 3... Get Ready!`
+
+**Optimized AI DinoRun Loop:**
+```powershell
+$wshell = New-Object -ComObject WScript.Shell
+# Start the game
+$wshell.AppActivate('LikuBuddy Game Window')
+$wshell.SendKeys("{ENTER}")
+# Wait for countdown to finish
+do { Start-Sleep -ms 100; $s = Get-Content .\likubuddy-state.txt -Raw } while ($s -match "COUNTDOWN")
+# Main game loop - poll and react
+while ($true) {
+    $state = Get-Content .\likubuddy-state.txt -Raw
+    if ($state -match "GAME_OVER") { break }
+    if ($state -match "JUMP NOW.*Y=0") {
+        $wshell.AppActivate('LikuBuddy Game Window')
+        $wshell.SendKeys(" ")  # Space to jump
+    }
+    Start-Sleep -ms 50  # Fast poll for obstacles
+}
+```
 
 #### �🧠 MEMORIZED RULES (Don't re-read, just act):
 1. **Dino is at X=52** (right side of 60-wide screen)

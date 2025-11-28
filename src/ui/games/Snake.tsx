@@ -139,7 +139,7 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 	const generateNanobananaImage = useCallback((lvl: number) => {
 		const art = `
    __
-  /  \\
+  /  \
   |  |  Level ${lvl} Achieved!
   |  |
   |  |  Nanobanana says:

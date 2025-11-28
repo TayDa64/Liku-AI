@@ -1,13 +1,17 @@
-PROCESS ID: 12508
-CURRENT SCREEN: Games Menu
-STATUS: Level: 12, XP: 120, Hunger: 100%, Energy: 50%, Happiness: 100%
+PROCESS ID: 32060
+CURRENT SCREEN: Main Menu
+STATUS: Level: 12, XP: 277, Hunger: 100%, Energy: 100%, Happiness: 100%
 
 VISUAL STATE:
 MENU ITEMS:
-  [ ] 🐍 Play Snake (Energy -10, Happiness +10)
-  [ ] ❌⭕ Tic-Tac-Toe (Energy -5, XP/Happy Rewards)
-  [x] 🦖 Dino Run (Energy -10, XP Rewards)
-  [ ] 🔙 Back to Main Menu
+  [ ] 🎮 Let's Play
+  [ ] 🔨 Let's Build a Game! (Open Source SDK)
+  [ ] 🌟 Community Games
+  [ ] 💻 LikuOS Stats
+  [ ] 🍖 Feed Liku (XP -10, Hunger -20)
+  [ ] 💤 Rest (Energy +30, Hunger +10)
+  [ ] ⚙️ Settings
+  [x] 🚪 Exit
 
 
 CONTROLS: Use Arrows to move, Enter to select, Esc/Q to quit.
