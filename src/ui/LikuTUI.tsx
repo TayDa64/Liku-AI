@@ -6,6 +6,7 @@ import Snake from './games/Snake.js';
 import TicTacToe from './games/TicTacToe.js';
 import DinoRun from './games/DinoRun.js';
 import Hangman from './games/Hangman.js';
+import Sudoku from './games/Sudoku.js';
 import SettingsMenu from './SettingsMenu.js';
 import BuilderUI from './BuilderUI.js';
 import CommunityGamesMenu from './CommunityGamesMenu.js';
@@ -104,6 +105,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		{ id: 'tictactoe', name: '❌⭕ Tic-Tac-Toe (Energy -5, XP/Happy Rewards)' },
 		{ id: 'dinorun', name: '🦖 Dino Run (Energy -10, XP Rewards)' },
 		{ id: 'hangman', name: '📝 Hangman (Energy -5, XP Rewards)' },
+		{ id: 'sudoku', name: '🧩 Sudoku (Energy -5, XP Rewards)' },
 		{ id: 'back', name: '🔙 Back to Main Menu' }
 	];
 
@@ -176,6 +178,13 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 				return;
 			}
 			setActiveGame('hangman');
+		} else if (id === 'sudoku') {
+			if (stats.energy < 5) {
+				setMessage("Liku is too tired to play! Let him rest first.");
+				setTimeout(() => setMessage(null), 3000);
+				return;
+			}
+			setActiveGame('sudoku');
 		} else if (id === 'feed') {
 			if (stats.xp < 10) {
 				setMessage("Not enough XP to buy food! Play games to earn XP.");
@@ -257,6 +266,11 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 
 	if (activeGame === 'hangman') {
 		return <Hangman onExit={() => setActiveGame('games_menu')} />;
+	}
+
+	if (activeGame === 'sudoku') {
+		const sudokuDifficulty = settings?.snakeDifficulty === 'ai' ? 'medium' : settings?.snakeDifficulty;
+		return <Sudoku onExit={() => setActiveGame('games_menu')} difficulty={sudokuDifficulty} />;
 	}
 
 	if (activeGame === 'settings') {

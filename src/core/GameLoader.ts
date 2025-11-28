@@ -3,10 +3,9 @@ import path from 'path';
 import { db } from '../services/DatabaseService.js';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname } from 'path';
-import { build, transform } from 'esbuild';
+import { build } from 'esbuild';
 import os from 'os';
-import React, { lazy, Suspense, ComponentType } from 'react';
-import { Box, Text } from 'ink';
+import React, { ComponentType } from 'react';
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -18,7 +17,7 @@ export interface LoadedGame {
   metadata: { id: string; name: string; description: string };
 }
 
-// Cache for performance - avoids re-bundling on repeat plays
+// Cache for performance - avoids re-importing on repeat plays
 const gameCache = new Map<string, LoadedGame>();
 
 export interface GameInstallResult {
@@ -123,9 +122,9 @@ export class GameLoader {
   }
 
   /**
-   * Load a game dynamically by ID using React.lazy for tree integration
-   * This approach bundles in-memory and uses Function constructor with
-   * injected dependencies to ensure React context sharing
+   * Load a game dynamically by ID
+   * Uses direct ESM import with file:// URL for Windows compatibility
+   * Games are bundled with react/ink as externals, so they share the parent's instances
    */
   async loadGame(gameId: string): Promise<LoadedGame> {
     // Return cached game if available
@@ -148,76 +147,23 @@ export class GameLoader {
         throw new Error(`Game file not found: ${game.filePath}`);
       }
 
-      // Read the bundled JS code
-      const bundledCode = await fs.readFile(gamePath, 'utf-8');
+      // Convert Windows path to file:// URL for ESM compatibility
+      const gameUrl = pathToFileURL(gamePath).href;
 
-      // Transform ESM to a format we can evaluate with shared dependencies
-      // Use CJS format so we can inject require() with our shared modules
-      const cjsResult = await transform(bundledCode, {
-        format: 'cjs',
-        target: 'node20',
-      });
+      // Dynamic import - since we bundled with external: ['react', 'ink'],
+      // the game will use the same React/Ink instances as the parent
+      const gameModule = await import(gameUrl);
+      const GameComponent = gameModule.default || gameModule;
 
-      // Create a module factory that injects shared React/Ink instances
-      // This prevents the duplicate React context issue
-      const createComponent = (): ComponentType<any> => {
-        const moduleExports: any = {};
-        const moduleObj = { exports: moduleExports };
-        
-        // Custom require that returns our shared instances
-        const sharedRequire = (id: string): any => {
-          if (id === 'react' || id === 'react/jsx-runtime') {
-            return require('react');
-          }
-          if (id === 'ink') {
-            return require('ink');
-          }
-          if (id.includes('DatabaseService')) {
-            return { db };
-          }
-          // Fallback for other modules
-          return require(id);
-        };
-
-        try {
-          // Execute the bundled code with our injected dependencies
-          const factory = new Function(
-            'module',
-            'exports', 
-            'require',
-            '__filename',
-            '__dirname',
-            cjsResult.code
-          );
-          factory(moduleObj, moduleExports, sharedRequire, gamePath, this.gamesDir);
-        } catch (evalError) {
-          console.error(`Failed to evaluate game code for ${gameId}:`, evalError);
-          throw evalError;
-        }
-
-        return moduleObj.exports.default || moduleObj.exports;
-      };
-
-      // Use React.lazy for proper tree integration with Suspense fallback
-      const LazyComponent = lazy(() => 
-        Promise.resolve({ default: createComponent() })
-      );
-
-      // Wrap in Suspense with loading indicator
+      // Wrap component with error boundary and safe props handling
       const WrappedComponent: ComponentType<{ onExit: () => void; difficulty?: string }> = (props) => {
-        // Defensive props handling (Claude's suggestion)
         const safeProps = props || {};
-        return React.createElement(
-          Suspense,
-          { 
-            fallback: React.createElement(
-              Box, 
-              { flexDirection: 'column', alignItems: 'center', padding: 1 },
-              React.createElement(Text, { color: 'yellow' }, `⏳ Loading ${game.name}...`)
-            )
-          },
-          React.createElement(LazyComponent, safeProps)
-        );
+        const safeOnExit = safeProps.onExit || (() => {});
+        
+        return React.createElement(GameComponent, {
+          ...safeProps,
+          onExit: safeOnExit,
+        });
       };
 
       const loaded: LoadedGame = {

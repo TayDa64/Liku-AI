@@ -1,10 +1,17 @@
-PROCESS ID: 17880
-CURRENT SCREEN: Game Builder
-STATUS: Builder Step: error | Quick Mode: false
+PROCESS ID: 34496
+CURRENT SCREEN: Main Menu
+STATUS: Level: 12, XP: 302, Hunger: 100%, Energy: 95%, Happiness: 100%
 
 VISUAL STATE:
-Current Step: error
-Error: Build failed with 1 error:
-../../Users/Tay Liku/AppData/Local/Temp/liku-game-sudoku-input.tsx:3:29: ERROR: Could not resolve "../../core/GameStateLogger.js"
+MENU ITEMS:
+  [ ] 🎮 Let's Play
+  [ ] 🔨 Let's Build a Game! (Open Source SDK)
+  [ ] 🌟 Community Games
+  [ ] 💻 LikuOS Stats
+  [ ] 🍖 Feed Liku (XP -10, Hunger -20)
+  [ ] 💤 Rest (Energy +30, Hunger +10)
+  [ ] ⚙️ Settings
+  [x] 🚪 Exit
+
 
 CONTROLS: Use Arrows to move, Enter to select, Esc/Q to quit.
