@@ -3,6 +3,7 @@ import { db } from '../services/DatabaseService.js';
 /**
  * Database tools for Gemini CLI integration
  * Provides read-only access to LikuBuddy's game database
+ * Updated for better-sqlite3 sync API
  */
 
 export interface DbToolResult {
@@ -13,6 +14,7 @@ export interface DbToolResult {
 
 /**
  * Query LikuBuddy stats - safe, read-only SQL access for AI
+ * Now uses sync API for better performance
  */
 export const queryLikuStats = async (query: string): Promise<DbToolResult> => {
   try {
@@ -25,9 +27,35 @@ export const queryLikuStats = async (query: string): Promise<DbToolResult> => {
       };
     }
 
-    // Execute the safe query
+    // Execute the safe query (now sync internally)
     const results = await db.executeSafeQuery(query);
 
+    return {
+      success: true,
+      data: results
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+};
+
+/**
+ * Sync version for immediate results (better-sqlite3 advantage)
+ */
+export const queryLikuStatsSync = (query: string): DbToolResult => {
+  try {
+    const trimmedQuery = query.trim().toUpperCase();
+    if (!trimmedQuery.startsWith('SELECT')) {
+      return {
+        success: false,
+        error: 'Only SELECT queries are allowed for security. This is read-only access.'
+      };
+    }
+
+    const results = db.executeSafeQuerySync(query);
     return {
       success: true,
       data: results
@@ -64,6 +92,24 @@ export const getGameHighScores = async (gameId: string, limit: number = 10): Pro
 export const getPlayerStats = async (): Promise<DbToolResult> => {
   try {
     const stats = await db.getStats();
+    return {
+      success: true,
+      data: stats
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+};
+
+/**
+ * Sync version for polling scenarios
+ */
+export const getPlayerStatsSync = (): DbToolResult => {
+  try {
+    const stats = db.getStatsSync();
     return {
       success: true,
       data: stats
