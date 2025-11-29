@@ -191,6 +191,25 @@ LikuBuddy supports AI agents (like Gemini, Claude, or GPT) controlling the game 
 > - Running `npm start` and agent commands in the same terminal
 > - Running agent scripts from within the game's terminal session
 
+### State File & Process Tracking
+
+LikuBuddy writes its current state to `likubuddy-state.txt` for AI visibility:
+
+```text
+PROCESS ID: 12345
+CURRENT SCREEN: Playing DinoRun
+STATUS: Score: 42 | State: PLAYING
+...
+```
+
+**Important behaviors:**
+- **On startup**: State file is updated with the new process PID
+- **During gameplay**: State file updates in real-time (every game tick)
+- **On exit**: State file is cleared to `PROCESS ID: TERMINATED` to prevent stale PID issues
+- **Stale detection**: If you see a numeric PID but no game is running, the terminal was likely closed unexpectedly
+
+**For AI agents**: Always validate the PID is still running before sending keys. The AutoPlayer module includes `isProcessRunning()` validation.
+
 ### Cross-Platform Agent CLI (Recommended)
 
 The unified agent CLI works on all platforms:
