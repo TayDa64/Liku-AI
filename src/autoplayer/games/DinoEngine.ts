@@ -32,12 +32,12 @@ export class DinoEngine {
     batSafeDistance?: number;
     jumpCooldown?: number;
   } = {}) {
-    // These values are tuned for the game's physics
-    // Dino takes ~6-8 frames to complete a jump
+    // Tuned for faster reaction - wider jump window
+    // The game state can lag, so jump earlier
     this.jumpDistanceMin = options.jumpDistanceMin || 2;
-    this.jumpDistanceMax = options.jumpDistanceMax || 7;
-    this.batSafeDistance = options.batSafeDistance || 3;
-    this.jumpCooldown = options.jumpCooldown || 400;  // 400ms cooldown
+    this.jumpDistanceMax = options.jumpDistanceMax || 10;  // Wider window - jump earlier
+    this.batSafeDistance = options.batSafeDistance || 4;
+    this.jumpCooldown = options.jumpCooldown || 350;  // Slightly shorter cooldown
   }
   
   /**

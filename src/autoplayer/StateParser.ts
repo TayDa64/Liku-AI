@@ -63,6 +63,11 @@ export class StateParser {
   private lastModified: number = 0;
   private cachedState: ParsedState | null = null;
   
+  // PID validation cache - avoid calling tasklist on every parse
+  private lastValidatedPid: number | null = null;
+  private lastPidValidationTime: number = 0;
+  private pidValidationCacheMs: number = 2000;  // Re-validate every 2 seconds
+  
   constructor(statePath?: string) {
     this.statePath = statePath || path.join(process.cwd(), 'likubuddy-state.txt');
   }
@@ -104,6 +109,18 @@ export class StateParser {
    * Parse the state file content
    */
   private parseContent(content: string): ParsedState {
+    // Check for TERMINATED state (app has exited cleanly)
+    if (content.includes('PROCESS ID: TERMINATED')) {
+      return {
+        timestamp: Date.now(),
+        pid: null,
+        pidValid: false,
+        screen: 'Application Closed',
+        status: 'TERMINATED',
+        raw: content
+      };
+    }
+    
     // Extract PID from state file
     const pidMatch = content.match(/PROCESS ID:\s*(\d+)/);
     const pid = pidMatch ? parseInt(pidMatch[1], 10) : null;
@@ -121,8 +138,22 @@ export class StateParser {
       };
     }
     
-    // Validate PID is still running
-    const pidValid = this.isProcessRunning(pid);
+    // Validate PID is still running (with caching to avoid slow tasklist calls)
+    let pidValid: boolean;
+    const now = Date.now();
+    
+    if (pid === this.lastValidatedPid && 
+        (now - this.lastPidValidationTime) < this.pidValidationCacheMs) {
+      // Use cached validation result
+      pidValid = true;  // Assume valid if recently validated
+    } else {
+      // Actually validate
+      pidValid = this.isProcessRunning(pid);
+      if (pidValid) {
+        this.lastValidatedPid = pid;
+        this.lastPidValidationTime = now;
+      }
+    }
     
     const state: ParsedState = {
       timestamp: Date.now(),
