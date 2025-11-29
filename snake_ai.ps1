@@ -1,5 +1,10 @@
 $wshell = New-Object -ComObject WScript.Shell
-$gameWindowName = 'LikuBuddy Game Window'
+
+# Window title set by LikuBuddy (see src/index.tsx)
+$gameWindowName = 'LikuBuddy Game Hub'
+
+# Fallback titles to try if primary doesn't work
+$fallbackTitles = @('LikuBuddy', 'Liku', 'node')
 
 function Get-GameState {
     if (-not (Test-Path .\likubuddy-state.txt)) { return $null }
@@ -45,7 +50,22 @@ function Get-GameState {
 }
 
 function Send-Key ($key) {
-    $wshell.AppActivate($gameWindowName)
+    $success = $wshell.AppActivate($gameWindowName)
+    
+    # Try fallback titles if primary fails
+    if (-not $success) {
+        foreach ($title in $fallbackTitles) {
+            $success = $wshell.AppActivate($title)
+            if ($success) { break }
+        }
+    }
+    
+    if (-not $success) {
+        Write-Warning "Could not activate game window"
+        return
+    }
+    
+    Start-Sleep -Milliseconds 50
     $wshell.SendKeys($key)
 }
 

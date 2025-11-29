@@ -82,7 +82,7 @@ const LINUX_KEY_MAP: Record<GameKey, string> = {
  * Send a key to the LikuBuddy game window
  * Cross-platform implementation
  */
-export async function sendKey(key: GameKey, windowTitle: string = 'LikuBuddy'): Promise<void> {
+export async function sendKey(key: GameKey, windowTitle: string = 'LikuBuddy Game Hub'): Promise<void> {
   const platform = getPlatform();
   const toolInfo = getKeySimTool();
   
@@ -127,8 +127,16 @@ async function sendKeyWindows(key: GameKey, windowTitle: string): Promise<void> 
     $wshell.SendKeys('${sendKeysValue}')
   `;
   
+  // Convert multiline script to single line with semicolons
+  // PowerShell requires semicolons to separate statements on one line
+  const singleLineScript = script
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .join('; ');
+  
   return new Promise((resolve, reject) => {
-    exec(`powershell -Command "${script.replace(/"/g, '\\"').replace(/\n/g, ' ')}"`, (error) => {
+    exec(`powershell -Command "${singleLineScript.replace(/"/g, '\\"')}"`, (error) => {
       if (error) {
         reject(new Error(`Failed to send key: ${error.message}`));
       } else {

@@ -179,6 +179,18 @@ Liku isn't just a menu; he has needs!
 
 LikuBuddy supports AI agents (like Gemini, Claude, or GPT) controlling the game programmatically. We provide **cross-platform** tools that work on Windows, macOS, and Linux.
 
+> ⚠️ **CRITICAL: Run Game in Separate Terminal**
+> 
+> When using AI agents to control LikuBuddy, you **MUST** run the game in a separate terminal window from your agent commands. The agent scripts use window activation and sleep commands that will freeze your environment if run in the same terminal as the game.
+> 
+> **Correct Setup:**
+> 1. Open **Terminal 1**: Run `npm start` (game runs here)
+> 2. Open **Terminal 2**: Run agent commands here (e.g., `npm run agent key enter`)
+> 
+> **Wrong Setup (will freeze):**
+> - Running `npm start` and agent commands in the same terminal
+> - Running agent scripts from within the game's terminal session
+
 ### Cross-Platform Agent CLI (Recommended)
 
 The unified agent CLI works on all platforms:
