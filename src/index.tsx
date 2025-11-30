@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { render, useStdin, useApp, useStdout } from 'ink';
 import meow from 'meow';
+import fs from 'node:fs';
+import path from 'node:path';
 import GameHub from './ui/LikuTUI.js';
+
+// State file path for AI visibility
+const STATE_FILE = path.join(process.cwd(), 'likubuddy-state.txt');
 
 // ============================================================
 // ANSI Escape Codes for Terminal Control
@@ -92,8 +97,8 @@ const initFullscreen = () => {
   process.stdout.write(ANSI.CLEAR_SCREEN + ANSI.CURSOR_HOME);
   // Reset scroll region
   process.stdout.write(ANSI.SCROLL_REGION_FULL);
-  // Set title
-  process.stdout.write(ANSI.SET_TITLE('LikuBuddy Game Hub'));
+  // Set title with PID for unique window targeting (important for AutoPlayer)
+  process.stdout.write(ANSI.SET_TITLE(`LikuBuddy Game Hub [${process.pid}]`));
 };
 
 const exitFullscreen = () => {
@@ -102,15 +107,30 @@ const exitFullscreen = () => {
   process.stdout.write(ANSI.ALT_BUFFER_OFF);
 };
 
+// Clear the state file when the app exits to prevent stale PID issues
+const clearStateFile = () => {
+  try {
+    const content = `PROCESS ID: TERMINATED\nCURRENT SCREEN: Application Closed\nSTATUS: The LikuBuddy application has exited.\n\nVISUAL STATE:\nNo active session. Start LikuBuddy with 'npm start' to begin.\n\nCONTROLS: N/A\n`;
+    fs.writeFileSync(STATE_FILE, content, 'utf-8');
+  } catch {
+    // Ignore errors - file may not exist or be locked
+  }
+};
+
 // Initialize fullscreen mode BEFORE React renders
 initFullscreen();
 
-// Handle exit cleanup
-process.on('exit', exitFullscreen);
-process.on('SIGINT', () => { exitFullscreen(); process.exit(0); });
-process.on('SIGTERM', () => { exitFullscreen(); process.exit(0); });
+// Handle exit cleanup - clear state file and restore terminal
+const cleanup = () => {
+  clearStateFile();
+  exitFullscreen();
+};
+
+process.on('exit', cleanup);
+process.on('SIGINT', () => { cleanup(); process.exit(0); });
+process.on('SIGTERM', () => { cleanup(); process.exit(0); });
 process.on('uncaughtException', (err) => { 
-  exitFullscreen(); 
+  cleanup(); 
   console.error('Uncaught exception:', err);
   process.exit(1); 
 });

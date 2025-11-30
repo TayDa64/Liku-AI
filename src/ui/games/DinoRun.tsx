@@ -477,8 +477,12 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 		return rows;
 	};
 
+	// Fixed height for the entire component prevents layout shifts during gameplay
+	// Height breakdown: 1 (title) + 1 (marginBottom) + (GAME_HEIGHT + 2 borders = 14) + 1 (marginTop) + 4 (instructions) + 2 (outer borders) = 23
+	const TOTAL_HEIGHT = GAME_HEIGHT + 11;
+
 	return (
-		<Box flexDirection="column" alignItems="center" borderStyle="round" borderColor="cyan" width={GAME_WIDTH + 4}>
+		<Box flexDirection="column" alignItems="center" borderStyle="round" borderColor="cyan" width={GAME_WIDTH + 4} height={TOTAL_HEIGHT}>
 			<Box marginBottom={1}>
 				<Text bold color="yellow">🦖 Liku Run 🦖</Text>
 			</Box>
@@ -487,29 +491,30 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 				{renderScene()}
 			</Box>
 
-			<Box marginTop={1}>
+			{/* Fixed height instruction box - prevents layout shifts between game states */}
+			<Box marginTop={1} height={4} flexDirection="column" alignItems="center">
 				{gameState === 'START' && (
 					<Text color="green" bold>Press ENTER to Start! (Space/Up to Jump)</Text>
 				)}
 				{gameState === 'COUNTDOWN' && (
-					<Box flexDirection="column" alignItems="center">
+					<>
 						<Text color="yellow" bold>GET READY!</Text>
 						<Text color="cyan" bold>
 							{countdown > 0 ? `Starting in ${countdown}...` : 'GO!'}
 						</Text>
 						<Text dimColor>Press SPACE to jump when obstacles appear</Text>
-					</Box>
+					</>
 				)}
 				{gameState === 'PLAYING' && (
 					<Text color="gray">Space/Up to Jump • Q to Quit</Text>
 				)}
 				{gameState === 'GAME_OVER' && (
-					<Box flexDirection="column" alignItems="center">
+					<>
 						<Text color="red" bold>GAME OVER</Text>
 						<Text color="yellow">{message}</Text>
 						<Text>Final Score: {score}</Text>
 						<Text dimColor>Press ENTER to Try Again</Text>
-					</Box>
+					</>
 				)}
 			</Box>
 		</Box>

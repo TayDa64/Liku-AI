@@ -11,6 +11,7 @@ import SettingsMenu from './SettingsMenu.js';
 import BuilderUI from './BuilderUI.js';
 import CommunityGamesMenu from './CommunityGamesMenu.js';
 import LikuOS from './LikuOS.js';
+import LikuLearnScreen from './LikuLearnScreen.js';
 import { db, PlayerStats, UserSettings, ProTokens } from '../services/DatabaseService.js';
 import { logGameState } from '../core/GameStateLogger.js';
 import type { LoadedGame } from '../core/GameLoader.js';
@@ -109,6 +110,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		{ id: 'games_menu', name: '🎮 Let\'s Play' },
 		{ id: 'builder', name: '🔨 Let\'s Build a Game! (Open Source SDK)' },
 		{ id: 'community', name: '🌟 Community Games' },
+		{ id: 'liku_learn', name: '🎓 Liku Learn (Wisdom Center)' },
 		{ id: 'liku_os', name: '💻 LikuOS Stats' },
 		{ id: 'feed', name: '🍖 Feed Liku (XP -10, Hunger -20)' },
 		{ id: 'rest', name: '💤 Rest (Energy +30, Hunger +10)' },
@@ -167,6 +169,9 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 			clearBeforeTransition();
 			setShowLikuOS(true);
 			setActiveGame('liku_os');
+		} else if (id === 'liku_learn') {
+			clearBeforeTransition();
+			setActiveGame('liku_learn');
 		} else if (id === 'games_menu') {
 			clearBeforeTransition();
 			setActiveGame('games_menu');
@@ -265,6 +270,11 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 			handleAction('rest');
 			return;
 		}
+		// Shortcut for Liku Learn
+		if (input === 'l' && !activeGame) {
+			handleAction('liku_learn');
+			return;
+		}
 
 		if (key.upArrow) performAction('up');
 		if (key.downArrow) performAction('down');
@@ -317,6 +327,10 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 
 	if (activeGame === 'builder') {
 		return <BuilderUI onExit={() => { handleGameExit(null); refreshData(); }} />;
+	}
+
+	if (activeGame === 'liku_learn') {
+		return <LikuLearnScreen onExit={() => handleGameExit(null)} />;
 	}
 
 	if (activeGame === 'community') {
@@ -440,7 +454,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 
 			<Box marginTop={1} flexDirection="column">
 				<Text dimColor>Use ↑/↓ to select, Enter to act{isGameMenu ? ', Esc to back' : ''}</Text>
-				<Text dimColor>Press 'm' to toggle mini dashboard mode</Text>
+				<Text dimColor>Press 'm' to toggle mini dashboard, 'l' for Liku Learn</Text>
 			</Box>
 		</Box>
 	);

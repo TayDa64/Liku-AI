@@ -1,12 +1,14 @@
 {
   "name": "gemini-cli-liku-extension",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
-  "description": "LikuBuddy - Terminal Based ASCII Game Hub",
+  "description": "LikuBuddy - Terminal-Based ASCII Game Hub with AI Auto-Player",
   "main": "dist/index.js",
   "bin": {
     "liku": "dist/index.js",
-    "liku-agent": "dist/agent/cli.js"
+    "liku-agent": "dist/agent/cli.js",
+    "liku-autoplay": "dist/autoplayer/cli.js",
+    "liku-learn": "dist/learn/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -17,6 +19,9 @@
     "agent": "node dist/agent/cli.js",
     "agent:info": "node dist/agent/cli.js info",
     "agent:read": "node dist/agent/cli.js read",
+    "autoplay": "node dist/autoplayer/cli.js",
+    "autoplay:dino": "node dist/autoplayer/cli.js --game dino",
+    "autoplay:dino:verbose": "node dist/autoplayer/cli.js --game dino --verbose",
     "postinstall": "node scripts/install-command.js",
     "preuninstall": "node scripts/uninstall-command.js"
   },
