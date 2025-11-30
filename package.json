@@ -7,7 +7,8 @@
   "bin": {
     "liku": "dist/index.js",
     "liku-agent": "dist/agent/cli.js",
-    "liku-autoplay": "dist/autoplayer/cli.js"
+    "liku-autoplay": "dist/autoplayer/cli.js",
+    "liku-learn": "dist/learn/cli.js"
   },
   "scripts": {
     "build": "tsc",

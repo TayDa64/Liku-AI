@@ -48,6 +48,31 @@ export interface LeaderboardEntry {
     metaData: string; // JSON string
 }
 
+// Liku Learn Types
+export interface LearnSettings {
+    enabled: boolean;
+    hintStyle: 'progressive' | 'direct';
+    saveHistory: boolean;
+    maxHistoryItems: number;
+    safeSearch: boolean;
+    maxSearchResults: number;
+    codebaseScope: 'likubuddy' | 'custom' | 'gemini';
+    customCodebasePath?: string;
+    wolframAppId?: string;
+    showSources: boolean;
+    showConfidence: boolean;
+}
+
+export interface LearnHistoryEntry {
+    id: number;
+    query: string;
+    queryType: string;
+    response: string;
+    sources: string | null;
+    isFavorite: boolean;
+    createdAt: string;
+}
+
 class DatabaseService {
     private db: Database.Database;
     private initialized: boolean = false;
@@ -168,6 +193,41 @@ class DatabaseService {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(game_id) REFERENCES game_registry(id)
             )
+        `);
+
+        // Liku Learn - Research History Table
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS learn_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                query TEXT NOT NULL,
+                query_type TEXT NOT NULL,
+                response TEXT NOT NULL,
+                sources TEXT,
+                is_favorite INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Liku Learn - Settings Table
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS learn_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                enabled INTEGER DEFAULT 1,
+                hint_style TEXT DEFAULT 'progressive',
+                save_history INTEGER DEFAULT 1,
+                max_history_items INTEGER DEFAULT 100,
+                safe_search INTEGER DEFAULT 1,
+                max_search_results INTEGER DEFAULT 5,
+                codebase_scope TEXT DEFAULT 'likubuddy',
+                custom_codebase_path TEXT,
+                wolfram_app_id TEXT,
+                show_sources INTEGER DEFAULT 1,
+                show_confidence INTEGER DEFAULT 0
+            )
+        `);
+
+        this.db.exec(`
+            INSERT OR IGNORE INTO learn_settings (id) VALUES (1)
         `);
 
         this.initialized = true;
@@ -427,6 +487,192 @@ class DatabaseService {
             throw new Error('No words found in hangman_words table.');
         }
         return row.word;
+    }
+
+    // ============================================================================
+    // Liku Learn Methods
+    // ============================================================================
+
+    /**
+     * Get Liku Learn settings
+     */
+    public async getLearnSettings(): Promise<LearnSettings> {
+        const row = this.db.prepare('SELECT * FROM learn_settings WHERE id = 1').get() as any;
+        return {
+            enabled: !!row.enabled,
+            hintStyle: row.hint_style as 'progressive' | 'direct',
+            saveHistory: !!row.save_history,
+            maxHistoryItems: row.max_history_items,
+            safeSearch: !!row.safe_search,
+            maxSearchResults: row.max_search_results,
+            codebaseScope: row.codebase_scope as 'likubuddy' | 'custom' | 'gemini',
+            customCodebasePath: row.custom_codebase_path,
+            wolframAppId: row.wolfram_app_id,
+            showSources: !!row.show_sources,
+            showConfidence: !!row.show_confidence,
+        };
+    }
+
+    /**
+     * Update Liku Learn settings
+     */
+    public async updateLearnSettings(settings: Partial<LearnSettings>): Promise<void> {
+        const fields: string[] = [];
+        const values: any[] = [];
+
+        if (settings.enabled !== undefined) {
+            fields.push('enabled = ?');
+            values.push(settings.enabled ? 1 : 0);
+        }
+        if (settings.hintStyle !== undefined) {
+            fields.push('hint_style = ?');
+            values.push(settings.hintStyle);
+        }
+        if (settings.saveHistory !== undefined) {
+            fields.push('save_history = ?');
+            values.push(settings.saveHistory ? 1 : 0);
+        }
+        if (settings.maxHistoryItems !== undefined) {
+            fields.push('max_history_items = ?');
+            values.push(settings.maxHistoryItems);
+        }
+        if (settings.safeSearch !== undefined) {
+            fields.push('safe_search = ?');
+            values.push(settings.safeSearch ? 1 : 0);
+        }
+        if (settings.maxSearchResults !== undefined) {
+            fields.push('max_search_results = ?');
+            values.push(settings.maxSearchResults);
+        }
+        if (settings.codebaseScope !== undefined) {
+            fields.push('codebase_scope = ?');
+            values.push(settings.codebaseScope);
+        }
+        if (settings.customCodebasePath !== undefined) {
+            fields.push('custom_codebase_path = ?');
+            values.push(settings.customCodebasePath);
+        }
+        if (settings.wolframAppId !== undefined) {
+            fields.push('wolfram_app_id = ?');
+            values.push(settings.wolframAppId);
+        }
+        if (settings.showSources !== undefined) {
+            fields.push('show_sources = ?');
+            values.push(settings.showSources ? 1 : 0);
+        }
+        if (settings.showConfidence !== undefined) {
+            fields.push('show_confidence = ?');
+            values.push(settings.showConfidence ? 1 : 0);
+        }
+
+        if (fields.length === 0) return;
+
+        const query = `UPDATE learn_settings SET ${fields.join(', ')} WHERE id = 1`;
+        this.db.prepare(query).run(...values);
+    }
+
+    /**
+     * Add a research query to history
+     */
+    public async addLearnHistoryEntry(
+        query: string,
+        queryType: string,
+        response: string,
+        sources?: string
+    ): Promise<number> {
+        const result = this.db.prepare(
+            'INSERT INTO learn_history (query, query_type, response, sources) VALUES (?, ?, ?, ?)'
+        ).run(query, queryType, response, sources || null);
+        
+        // Cleanup old entries if exceeding max
+        const settings = await this.getLearnSettings();
+        this.db.prepare(`
+            DELETE FROM learn_history 
+            WHERE id NOT IN (
+                SELECT id FROM learn_history 
+                ORDER BY created_at DESC 
+                LIMIT ?
+            )
+        `).run(settings.maxHistoryItems);
+
+        return result.lastInsertRowid as number;
+    }
+
+    /**
+     * Get research history
+     */
+    public async getLearnHistory(limit: number = 20): Promise<LearnHistoryEntry[]> {
+        const rows = this.db.prepare(
+            'SELECT * FROM learn_history ORDER BY created_at DESC LIMIT ?'
+        ).all(limit) as any[];
+
+        return rows.map(row => ({
+            id: row.id,
+            query: row.query,
+            queryType: row.query_type,
+            response: row.response,
+            sources: row.sources,
+            isFavorite: !!row.is_favorite,
+            createdAt: row.created_at,
+        }));
+    }
+
+    /**
+     * Toggle favorite status of a history entry
+     */
+    public async toggleLearnFavorite(id: number): Promise<void> {
+        this.db.prepare(
+            'UPDATE learn_history SET is_favorite = NOT is_favorite WHERE id = ?'
+        ).run(id);
+    }
+
+    /**
+     * Get favorite research entries
+     */
+    public async getLearnFavorites(): Promise<LearnHistoryEntry[]> {
+        const rows = this.db.prepare(
+            'SELECT * FROM learn_history WHERE is_favorite = 1 ORDER BY created_at DESC'
+        ).all() as any[];
+
+        return rows.map(row => ({
+            id: row.id,
+            query: row.query,
+            queryType: row.query_type,
+            response: row.response,
+            sources: row.sources,
+            isFavorite: true,
+            createdAt: row.created_at,
+        }));
+    }
+
+    /**
+     * Clear all research history (except favorites)
+     */
+    public async clearLearnHistory(includeFavorites: boolean = false): Promise<void> {
+        if (includeFavorites) {
+            this.db.prepare('DELETE FROM learn_history').run();
+        } else {
+            this.db.prepare('DELETE FROM learn_history WHERE is_favorite = 0').run();
+        }
+    }
+
+    /**
+     * Search history
+     */
+    public async searchLearnHistory(searchTerm: string): Promise<LearnHistoryEntry[]> {
+        const rows = this.db.prepare(
+            'SELECT * FROM learn_history WHERE query LIKE ? OR response LIKE ? ORDER BY created_at DESC LIMIT 20'
+        ).all(`%${searchTerm}%`, `%${searchTerm}%`) as any[];
+
+        return rows.map(row => ({
+            id: row.id,
+            query: row.query,
+            queryType: row.query_type,
+            response: row.response,
+            sources: row.sources,
+            isFavorite: !!row.is_favorite,
+            createdAt: row.created_at,
+        }));
     }
 
     /**

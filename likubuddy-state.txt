@@ -1,17 +1,8 @@
-PROCESS ID: 5596
-CURRENT SCREEN: Main Menu
-STATUS: Level: 12, XP: 586, Hunger: 100%, Energy: 0%, Happiness: 100%
+PROCESS ID: TERMINATED
+CURRENT SCREEN: Application Closed
+STATUS: The LikuBuddy application has exited.
 
 VISUAL STATE:
-MENU ITEMS:
-  [ ] 🎮 Let's Play
-  [ ] 🔨 Let's Build a Game! (Open Source SDK)
-  [ ] 🌟 Community Games
-  [ ] 💻 LikuOS Stats
-  [ ] 🍖 Feed Liku (XP -10, Hunger -20)
-  [ ] 💤 Rest (Energy +30, Hunger +10)
-  [ ] ⚙️ Settings
-  [x] 🚪 Exit
+No active session. Start LikuBuddy with 'npm start' to begin.
 
-
-CONTROLS: Use Arrows to move, Enter to select, Esc/Q to quit.
+CONTROLS: N/A
