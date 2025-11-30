@@ -3,8 +3,15 @@ param (
     [string]$Key,
 
     [Parameter(Mandatory=$false)]
+    [ValidateScript({$_ -gt 0})]
     [int]$Id
 )
+
+# Validate Key parameter is not empty
+if (-not $Key) {
+    Write-Error "Key parameter is required."
+    exit 1
+}
 
 $wshell = New-Object -ComObject WScript.Shell
 $success = $false

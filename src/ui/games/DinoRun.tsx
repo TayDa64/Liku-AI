@@ -478,7 +478,7 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 	};
 
 	// Fixed height for the entire component prevents layout shifts during gameplay
-	// Height breakdown: 1 (title) + 1 (margin) + 14 (game area) + 1 (margin) + 4 (instructions) + 2 (borders) = 23
+	// Height breakdown: 1 (title) + 1 (marginBottom) + (GAME_HEIGHT + 2 borders = 14) + 1 (marginTop) + 4 (instructions) + 2 (outer borders) = 23
 	const TOTAL_HEIGHT = GAME_HEIGHT + 11;
 
 	return (

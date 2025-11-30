@@ -66,7 +66,7 @@ export class StateParser {
   // PID validation cache - avoid calling tasklist on every parse
   private lastValidatedPid: number | null = null;
   private lastPidValidationTime: number = 0;
-  private pidValidationCacheMs: number = 2000;  // Re-validate every 2 seconds
+  private pidValidationCacheMs: number = 5000;  // Re-validate every 5 seconds (matches docs)
   
   constructor(statePath?: string) {
     this.statePath = statePath || path.join(process.cwd(), 'likubuddy-state.txt');
@@ -300,8 +300,7 @@ export class StateParser {
     
     // Detect turn
     const isYourTurn = content.includes('Your Turn');
-    const isThinking = content.includes('thinking');
-    
+
     state.tictactoe = {
       board,
       cursor: cursorMatch ? parseInt(cursorMatch[1], 10) : 4,

@@ -35,15 +35,19 @@ function parseArgs(): {
     switch (arg) {
       case '--game':
       case '-g':
-        const game = args[++i]?.toLowerCase();
-        if (['dino', 'snake', 'tictactoe', 'auto'].includes(game)) {
-          result.game = game as GameType;
+        if (i + 1 < args.length) {
+          const game = args[++i]?.toLowerCase();
+          if (['dino', 'snake', 'tictactoe', 'auto'].includes(game)) {
+            result.game = game as GameType;
+          }
         }
         break;
         
       case '--poll':
       case '-p':
-        result.pollInterval = parseInt(args[++i], 10) || 30;
+        if (i + 1 < args.length) {
+          result.pollInterval = parseInt(args[++i], 10) || 30;
+        }
         break;
         
       case '--verbose':
@@ -58,7 +62,9 @@ function parseArgs(): {
         
       case '--max-loops':
       case '-m':
-        result.maxLoops = parseInt(args[++i], 10) || 0;
+        if (i + 1 < args.length) {
+          result.maxLoops = parseInt(args[++i], 10) || 0;
+        }
         break;
         
       case '--help':

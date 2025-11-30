@@ -31,6 +31,22 @@ const LINUX_KEYS: Record<GameKey, string> = {
   q: 'q', f: 'f', r: 'r', m: 'm'
 };
 
+/**
+ * Escape a string for safe use in shell commands
+ * Prevents command injection attacks
+ */
+function escapeShellArg(arg: string): string {
+  // For Windows PowerShell, escape double quotes and backticks
+  return arg.replace(/[`"$]/g, '`$&');
+}
+
+/**
+ * Escape a string for safe use in AppleScript
+ */
+function escapeAppleScript(arg: string): string {
+  return arg.replace(/[\\'"]/g, '\\$&');
+}
+
 export class KeySender {
   private platform: Platform;
   private windowTitle: string;
@@ -81,7 +97,7 @@ export class KeySender {
     
     switch (this.platform) {
       case 'windows':
-        return this.sendWindows(key);
+        return this.sendWindows(key);  // Sync but wrapped in async interface
       case 'macos':
         return this.sendMacOS(key);
       case 'linux':
@@ -94,14 +110,17 @@ export class KeySender {
    * Uses synchronous execution for speed (avoids async overhead)
    * Pass targetPid for precise window targeting via title "LikuBuddy Game Hub [PID]"
    */
-  private async sendWindows(key: GameKey): Promise<boolean> {
+  private sendWindows(key: GameKey): boolean {
     const keyCode = WINDOWS_KEYS[key];
     if (!keyCode) return false;
     
     try {
+      // Escape the key code to prevent command injection
+      const escapedKey = escapeShellArg(keyCode);
+      
       // Build command with PID for precise title-based targeting
-      let command = `powershell -ExecutionPolicy Bypass -File "${this.scriptPath}" -Key "${keyCode}"`;
-      if (this.targetPid) {
+      let command = `powershell -ExecutionPolicy Bypass -File "${this.scriptPath}" -Key "${escapedKey}"`;
+      if (this.targetPid !== null && this.targetPid > 0) {
         command += ` -Id ${this.targetPid}`;
       }
       
@@ -129,7 +148,9 @@ export class KeySender {
     if (keyCode.code !== undefined) {
       script = `tell application "System Events" to key code ${keyCode.code}`;
     } else {
-      script = `tell application "System Events" to keystroke "${keyCode.char}"`;
+      // Escape the character for AppleScript to prevent injection
+      const escapedChar = escapeAppleScript(keyCode.char || '');
+      script = `tell application "System Events" to keystroke "${escapedChar}"`;
     }
     
     return new Promise((resolve) => {
@@ -158,9 +179,13 @@ export class KeySender {
     const keyCode = LINUX_KEYS[key];
     if (!keyCode) return false;
     
+    // Escape window title for shell to prevent injection
+    // Use single quotes and escape any existing single quotes
+    const escapedTitle = this.windowTitle.replace(/'/g, "'\\''");
+    
     // Activate window and send key
     const command = 
-      `xdotool search --name "${this.windowTitle}" windowactivate --sync 2>/dev/null; ` +
+      `xdotool search --name '${escapedTitle}' windowactivate --sync 2>/dev/null; ` +
       `xdotool key ${keyCode}`;
     
     return new Promise((resolve) => {

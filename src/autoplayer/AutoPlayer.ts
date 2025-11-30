@@ -97,8 +97,10 @@ export class AutoPlayer {
     }
     
     // Set target PID for precise window targeting
-    this.keySender.setTargetPid(initialState.pid!);
-    this.log(`   Target PID: ${initialState.pid}`);
+    if (initialState.pid !== null) {
+      this.keySender.setTargetPid(initialState.pid);
+      this.log(`   Target PID: ${initialState.pid}`);
+    }
     this.log(`   Screen: ${initialState.screen}`);
     this.log('');
     

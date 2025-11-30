@@ -206,7 +206,7 @@ STATUS: Score: 42 | State: PLAYING
 - **On startup**: State file is updated with the new process PID
 - **During gameplay**: State file updates in real-time (every game tick)
 - **On exit**: State file is cleared to `PROCESS ID: TERMINATED` to prevent stale PID issues
-- **Stale detection**: If you see a numeric PID but no game is running, the terminal was likely closed unexpectedly
+- **Stale detection**: If you see a numeric PID but no corresponding game process is running, the terminal was likely closed unexpectedly (e.g., via Task Manager or crash)
 
 **For AI agents**: Always validate the PID is still running before sending keys. The AutoPlayer module includes `isProcessRunning()` validation.
 
