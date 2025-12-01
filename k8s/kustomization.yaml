@@ -1,0 +1,25 @@
+# =============================================================================
+# Liku-AI Kustomization
+# Deploy all resources with: kubectl apply -k k8s/
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: liku-ai
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - redis.yaml
+  - deployment.yaml
+  - service.yaml
+  - hpa.yaml
+  - ingress.yaml
+
+commonLabels:
+  app.kubernetes.io/managed-by: kustomize
+  app.kubernetes.io/part-of: liku-ai
+
+images:
+  - name: ghcr.io/tayda64/liku-ai
+    newTag: latest

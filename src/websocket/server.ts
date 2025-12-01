@@ -20,10 +20,13 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
+import { createServer as createHttpServer, IncomingMessage, ServerResponse, Server as HttpServer } from 'http';
+import { createServer as createHttpsServer, Server as HttpsServer } from 'https';
 import { CommandRouter } from './router.js';
 import { AgentManager, AgentInfo, AgentCredentials, AgentRole } from './agents.js';
 import { TurnManager, TurnMode, CommandPriority } from './turns.js';
 import { GameSessionManager, gameSessionManager } from './sessions.js';
+import { SecurityManager, TLSConfig, JWTConfig, DEFAULT_TLS_CONFIG, DEFAULT_JWT_CONFIG } from './security.js';
 import { 
   PROTOCOL_VERSION, 
   DEFAULT_PORT, 
@@ -110,6 +113,10 @@ export interface ServerConfig {
   enableRateLimiting: boolean;
   requireAuth: boolean; // Require agent authentication
   turnMode: TurnMode; // Turn-taking mode for multi-agent games
+  // Phase 5.3: Security configuration
+  tls?: Partial<TLSConfig>; // TLS/WSS configuration
+  jwt?: Partial<JWTConfig>; // JWT authentication configuration
+  healthPort?: number; // Health endpoint port (default: port + 1)
 }
 
 /**
@@ -128,12 +135,15 @@ export interface ServerStats {
 
 export class LikuWebSocketServer extends EventEmitter {
   private wss: WebSocketServer | null = null;
+  private httpServer: HttpServer | HttpsServer | null = null;
+  private healthHttpServer: HttpServer | null = null;
   private clients: Map<string, LikuWebSocket> = new Map();
   private currentState: UnifiedGameState | null = null;
   private router: CommandRouter;
   private agentManager: AgentManager;
   private turnManager: TurnManager;
   private sessionManager: GameSessionManager;
+  private securityManager: SecurityManager;
   private heartbeatInterval: NodeJS.Timeout | null = null;
   private config: ServerConfig;
   private startTime: number = 0;
@@ -159,12 +169,16 @@ export class LikuWebSocketServer extends EventEmitter {
       enableRateLimiting: config?.enableRateLimiting ?? true,
       requireAuth: config?.requireAuth ?? false,
       turnMode: config?.turnMode ?? TurnMode.FREE,
+      tls: config?.tls,
+      jwt: config?.jwt,
+      healthPort: config?.healthPort,
     };
     
     this.router = new CommandRouter(undefined, gameSessionManager);
     this.agentManager = new AgentManager();
     this.turnManager = new TurnManager({ mode: this.config.turnMode });
     this.sessionManager = gameSessionManager;
+    this.securityManager = new SecurityManager(this.config.tls, this.config.jwt);
     this.setupRouterListeners();
     this.setupTurnListeners();
     this.setupSessionListeners();
@@ -286,15 +300,45 @@ export class LikuWebSocketServer extends EventEmitter {
 
   /**
    * Start the WebSocket server
+   * Supports both ws:// (plain) and wss:// (TLS) connections
    */
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        this.wss = new WebSocketServer({ 
-          port: this.config.port,
-          maxPayload: MAX_PAYLOAD.INCOMING,
-          perMessageDeflate: this.config.enableCompression,
-        });
+        // Check if TLS is enabled
+        const isTLS = this.securityManager.isTLSEnabled();
+        const isJWT = this.securityManager.isJWTEnabled();
+        
+        if (isTLS) {
+          // Create HTTPS server with TLS options
+          const tlsOptions = this.securityManager.getSecureServerOptions();
+          if (!tlsOptions) {
+            throw new Error('TLS enabled but no valid options provided');
+          }
+          
+          this.httpServer = createHttpsServer(tlsOptions as Parameters<typeof createHttpsServer>[0]);
+          this.httpServer.listen(this.config.port);
+          
+          // Attach WebSocket server to HTTPS server
+          this.wss = new WebSocketServer({ 
+            server: this.httpServer,
+            maxPayload: MAX_PAYLOAD.INCOMING,
+            perMessageDeflate: this.config.enableCompression,
+          });
+          
+          console.log(`[WS] TLS enabled - using wss:// (${this.config.tls?.minVersion || 'TLSv1.2'}+)`);
+        } else {
+          // Plain WebSocket server
+          this.wss = new WebSocketServer({ 
+            port: this.config.port,
+            maxPayload: MAX_PAYLOAD.INCOMING,
+            perMessageDeflate: this.config.enableCompression,
+          });
+        }
+        
+        if (isJWT) {
+          console.log(`[WS] JWT authentication enabled (algorithm: ${this.config.jwt?.algorithm || 'HS256'})`);
+        }
         
         this.wss.on('connection', (ws: WebSocket, req) => {
           // Check max clients
@@ -305,6 +349,33 @@ export class LikuWebSocketServer extends EventEmitter {
 
           // Extract authentication from URL query params or headers
           const url = new URL(req.url || '/', `http://localhost:${this.config.port}`);
+          
+          // JWT Authentication validation
+          if (isJWT) {
+            const headers: Record<string, string | undefined> = {
+              authorization: req.headers['authorization'] as string | undefined,
+              'sec-websocket-protocol': req.headers['sec-websocket-protocol'] as string | undefined,
+            };
+            
+            // Also check for token in query params
+            const queryToken = url.searchParams.get('token');
+            if (queryToken && !headers.authorization) {
+              headers.authorization = `Bearer ${queryToken}`;
+            }
+            
+            const tokenValidation = this.securityManager.validateUpgradeRequest(headers);
+            if (!tokenValidation.valid) {
+              console.warn(`[WS] JWT validation failed: ${tokenValidation.error}`);
+              ws.close(4001, tokenValidation.error || 'Authentication failed');
+              return;
+            }
+            
+            // Log successful JWT auth (hash the sub for privacy)
+            if (tokenValidation.payload) {
+              console.log(`[WS] JWT authenticated: agent=${tokenValidation.payload.sub.slice(0, 8)}...`);
+            }
+          }
+          
           const agentToken = url.searchParams.get('token') || req.headers['x-liku-agent-token'] as string | undefined;
           const agentName = url.searchParams.get('name') || req.headers['x-liku-agent-name'] as string || 'anonymous';
           const agentType = url.searchParams.get('type') || req.headers['x-liku-agent-type'] as string || 'ai';
@@ -343,7 +414,8 @@ export class LikuWebSocketServer extends EventEmitter {
           this.clients.set(likuWs.likuId, likuWs);
           this.stats.totalConnections++;
           
-          console.log(`[WS] Client connected: ${likuWs.likuId} (agent: ${agent.name}) (total: ${this.clients.size})`);
+          const secureLabel = isTLS ? ' [TLS]' : '';
+          console.log(`[WS] Client connected${secureLabel}: ${likuWs.likuId} (agent: ${agent.name}) (total: ${this.clients.size})`);
           
           // Get turn state for welcome message
           const turnState = this.turnManager.getAgentTurnState(agent.id);
@@ -368,6 +440,10 @@ export class LikuWebSocketServer extends EventEmitter {
                 mode: this.config.turnMode,
               } : undefined,
               sessionId: session?.sessionId,
+              security: {
+                tls: isTLS,
+                jwt: isJWT,
+              },
             },
             timestamp: Date.now(),
           });
@@ -417,17 +493,29 @@ export class LikuWebSocketServer extends EventEmitter {
         
         this.wss.on('listening', () => {
           this.startTime = Date.now();
-          console.log(`[WS] Liku-AI WebSocket server v${PROTOCOL_VERSION} listening on port ${this.config.port}`);
+          const protocol = isTLS ? 'wss' : 'ws';
+          console.log(`[WS] Liku-AI WebSocket server v${PROTOCOL_VERSION} listening on ${protocol}://localhost:${this.config.port}`);
+          
+          // Log security configuration summary
+          console.log(`[WS] Security: ${JSON.stringify(this.securityManager.getConfigSummary())}`);
           
           // Start heartbeat if enabled
           if (this.config.enableHeartbeat) {
             this.startHeartbeat();
           }
           
+          // Start health endpoint for K8s probes
+          this.startHealthEndpoint();
+          
           resolve();
         });
         
         this.wss.on('error', reject);
+        
+        // Also listen for HTTP server errors if using TLS
+        if (this.httpServer) {
+          this.httpServer.on('error', reject);
+        }
       } catch (err) {
         reject(err);
       }
@@ -562,6 +650,130 @@ export class LikuWebSocketServer extends EventEmitter {
   }
 
   /**
+   * Start HTTP health endpoint for Kubernetes probes
+   * Listens on port+1 (e.g., 3848 if WS is on 3847)
+   */
+  private startHealthEndpoint(): void {
+    const healthPort = this.config.healthPort ?? this.config.port + 1;
+    
+    this.healthHttpServer = createHttpServer((req: IncomingMessage, res: ServerResponse) => {
+      const url = req.url || '/';
+      
+      // Health check endpoints
+      if (url === '/health' || url === '/healthz') {
+        const health = this.getHealthStatus();
+        res.writeHead(health.status === 'healthy' ? 200 : 503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(health));
+        return;
+      }
+      
+      // Liveness probe - just checks if server is running
+      if (url === '/live' || url === '/livez') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'alive', timestamp: Date.now() }));
+        return;
+      }
+      
+      // Readiness probe - checks if server can accept connections
+      if (url === '/ready' || url === '/readyz') {
+        const isReady = this.wss !== null && this.clients.size < this.config.maxClients;
+        res.writeHead(isReady ? 200 : 503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+          status: isReady ? 'ready' : 'not_ready',
+          clients: this.clients.size,
+          maxClients: this.config.maxClients,
+          timestamp: Date.now(),
+        }));
+        return;
+      }
+      
+      // Metrics endpoint (Prometheus-style)
+      if (url === '/metrics') {
+        const metrics = this.getPrometheusMetrics();
+        res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+        res.end(metrics);
+        return;
+      }
+      
+      // Security config endpoint (safe summary)
+      if (url === '/security') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(this.securityManager.getConfigSummary()));
+        return;
+      }
+      
+      // Not found
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    });
+    
+    this.healthHttpServer.listen(healthPort, () => {
+      console.log(`[WS] Health endpoint listening on port ${healthPort}`);
+    });
+  }
+
+  /**
+   * Get health status for K8s probes
+   */
+  private getHealthStatus(): { status: string; uptime: number; clients: number; details: Record<string, unknown> } {
+    const uptime = Date.now() - this.startTime;
+    return {
+      status: this.wss ? 'healthy' : 'unhealthy',
+      uptime,
+      clients: this.clients.size,
+      details: {
+        version: PROTOCOL_VERSION,
+        maxClients: this.config.maxClients,
+        heartbeatEnabled: this.config.enableHeartbeat,
+        messagesReceived: this.stats.messagesReceived,
+        messagesSent: this.stats.messagesSent,
+        totalConnections: this.stats.totalConnections,
+        security: this.securityManager.getConfigSummary(),
+      },
+    };
+  }
+
+  /**
+   * Get Prometheus-format metrics
+   */
+  private getPrometheusMetrics(): string {
+    const lines: string[] = [
+      '# HELP liku_websocket_clients_current Current number of connected clients',
+      '# TYPE liku_websocket_clients_current gauge',
+      `liku_websocket_clients_current ${this.clients.size}`,
+      '',
+      '# HELP liku_websocket_clients_max Maximum allowed clients',
+      '# TYPE liku_websocket_clients_max gauge',
+      `liku_websocket_clients_max ${this.config.maxClients}`,
+      '',
+      '# HELP liku_websocket_connections_total Total connections since start',
+      '# TYPE liku_websocket_connections_total counter',
+      `liku_websocket_connections_total ${this.stats.totalConnections}`,
+      '',
+      '# HELP liku_websocket_messages_received_total Total messages received',
+      '# TYPE liku_websocket_messages_received_total counter',
+      `liku_websocket_messages_received_total ${this.stats.messagesReceived}`,
+      '',
+      '# HELP liku_websocket_messages_sent_total Total messages sent',
+      '# TYPE liku_websocket_messages_sent_total counter',
+      `liku_websocket_messages_sent_total ${this.stats.messagesSent}`,
+      '',
+      '# HELP liku_websocket_bytes_received_total Total bytes received',
+      '# TYPE liku_websocket_bytes_received_total counter',
+      `liku_websocket_bytes_received_total ${this.stats.bytesReceived}`,
+      '',
+      '# HELP liku_websocket_bytes_sent_total Total bytes sent',
+      '# TYPE liku_websocket_bytes_sent_total counter',
+      `liku_websocket_bytes_sent_total ${this.stats.bytesSent}`,
+      '',
+      '# HELP liku_websocket_uptime_seconds Server uptime in seconds',
+      '# TYPE liku_websocket_uptime_seconds gauge',
+      `liku_websocket_uptime_seconds ${Math.floor((Date.now() - this.startTime) / 1000)}`,
+    ];
+    return lines.join('\n');
+  }
+
+  /**
    * Stop the WebSocket server
    */
   stop(): Promise<void> {
@@ -570,6 +782,18 @@ export class LikuWebSocketServer extends EventEmitter {
       if (this.heartbeatInterval) {
         clearInterval(this.heartbeatInterval);
         this.heartbeatInterval = null;
+      }
+
+      // Stop health endpoint
+      if (this.healthHttpServer) {
+        this.healthHttpServer.close();
+        this.healthHttpServer = null;
+      }
+
+      // Stop HTTPS server if using TLS
+      if (this.httpServer) {
+        this.httpServer.close();
+        this.httpServer = null;
       }
 
       if (this.wss) {
@@ -597,6 +821,21 @@ export class LikuWebSocketServer extends EventEmitter {
         resolve();
       }
     });
+  }
+
+  /**
+   * Get the security manager for token operations
+   * Use this to generate JWT tokens for agents
+   */
+  getSecurityManager(): SecurityManager {
+    return this.securityManager;
+  }
+
+  /**
+   * Generate a JWT token for an agent (convenience method)
+   */
+  generateAgentToken(agentId: string, name: string, role: 'player' | 'spectator' | 'admin'): string {
+    return this.securityManager.generateToken(agentId, name, role);
   }
 
   /**

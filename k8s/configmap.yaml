@@ -1,0 +1,33 @@
+# =============================================================================
+# Liku-AI ConfigMap
+# Application configuration
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: liku-ai-config
+  namespace: liku-ai
+  labels:
+    app.kubernetes.io/name: liku-ai
+    app.kubernetes.io/component: config
+data:
+  # WebSocket settings
+  LIKU_WS_PORT: "3847"
+  LIKU_WS_HOST: "0.0.0.0"
+  
+  # Application settings
+  NODE_ENV: "production"
+  LIKU_DATA_DIR: "/data"
+  
+  # Rate limiting
+  LIKU_RATE_LIMIT_COMMANDS: "20"
+  LIKU_RATE_LIMIT_WINDOW_MS: "1000"
+  
+  # Session settings
+  LIKU_MAX_CLIENTS: "1000"
+  LIKU_HEARTBEAT_INTERVAL: "30000"
+  LIKU_CLIENT_TIMEOUT: "60000"
+  
+  # Spectator settings
+  LIKU_MAX_SPECTATORS_DEFAULT: "100"
+  LIKU_SPECTATOR_BROADCAST_INTERVAL: "100"

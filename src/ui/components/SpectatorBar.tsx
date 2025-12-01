@@ -167,7 +167,7 @@ const QualitySelector: React.FC<QualitySelectorProps> = ({
   useInput((input, key) => {
     if (disabled) return;
 
-    if (input === 'q' || input === 'Q') {
+    if (input === 'g' || input === 'G') {
       // Cycle through qualities
       const nextIndex = (selectedIndex + 1) % qualities.length;
       setSelectedIndex(nextIndex);
@@ -193,7 +193,7 @@ const QualitySelector: React.FC<QualitySelectorProps> = ({
       <Text color={qualityColors[currentQuality] as any} bold>
         {qualityLabels[currentQuality]}
       </Text>
-      <Text dimColor> (Q to change)</Text>
+      <Text dimColor> (G to change)</Text>
     </Box>
   );
 };

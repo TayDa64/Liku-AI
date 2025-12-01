@@ -1,0 +1,71 @@
+# =============================================================================
+# Liku-AI Ingress
+# NGINX Ingress with WebSocket support
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: liku-ai-ingress
+  namespace: liku-ai
+  labels:
+    app.kubernetes.io/name: liku-ai
+    app.kubernetes.io/component: ingress
+  annotations:
+    # NGINX specific settings for WebSocket
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$remote_addr"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "LIKUSESSION"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    # WebSocket upgrade headers
+    nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: liku.example.com  # Replace with your domain
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: liku-ai
+                port:
+                  number: 3847
+---
+# =============================================================================
+# Liku-AI Ingress (with TLS)
+# Uncomment and configure for HTTPS
+# =============================================================================
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: liku-ai-ingress-tls
+#   namespace: liku-ai
+#   annotations:
+#     cert-manager.io/cluster-issuer: "letsencrypt-prod"
+#     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+#     # ... same WebSocket annotations as above
+# spec:
+#   ingressClassName: nginx
+#   tls:
+#     - hosts:
+#         - liku.example.com
+#       secretName: liku-ai-tls
+#   rules:
+#     - host: liku.example.com
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: liku-ai
+#                 port:
+#                   number: 3847

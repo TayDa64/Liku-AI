@@ -218,3 +218,42 @@ export type {
   ChatHistoryPayload,
   ChatMutePayload,
 } from './chat.js';
+
+// Security System (Phase 5.3)
+export {
+  SecurityManager,
+  getSecurityManager,
+  resetSecurityManager,
+  DEFAULT_TLS_CONFIG,
+  DEFAULT_JWT_CONFIG,
+  TLS13_CIPHERS,
+} from './security.js';
+export type {
+  TLSConfig,
+  JWTConfig,
+  JWTPayload,
+  TokenValidationResult,
+} from './security.js';
+
+// TURN/STUN NAT Traversal (Phase 5.3)
+export {
+  TURNManager,
+  getTURNManager,
+  resetTURNManager,
+  DEFAULT_NAT_CONFIG,
+  SignalingMessageType,
+  isRelayCandidate,
+  isHostCandidate,
+  isSrflxCandidate,
+  getCandidatePriority,
+} from './turn.js';
+export type {
+  ICEServer,
+  TURNCredentials,
+  ICECandidate,
+  SDPMessage,
+  PeerConnectionState,
+  ICEConnectionState,
+  SignalingMessage,
+  TURNConfig,
+} from './turn.js';

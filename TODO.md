@@ -163,23 +163,31 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 
 ## 🎯 Phase 5: Remote Play (v2.2.0)
 
-### 5.1 Network Play 🔲
-- [ ] Add secure WebSocket (wss://) support
-- [ ] Implement authentication tokens
-- [ ] Add connection encryption
-- [ ] Support NAT traversal / TURN servers
+### 5.1 Spectator Mode ✅ Complete
+- [x] StateDiffer - JSON Patch RFC 6902 for efficient state updates
+- [x] SpectatorManager - Session management with quality tiers (high/medium/low)
+- [x] ChatManager - Real-time chat with moderation, reactions, rate limiting
+- [x] ChatPanel.tsx - Full chat UI with message display, reactions, input
+- [x] SpectatorBar.tsx - Spectator count, quality selector, quick reactions
+- [x] Game-specific spectator limits (Snake:100, TicTacToe:50, etc.)
+- [x] 93 tests for spectator module
 
-### 5.2 Cloud Deployment 🔲
-- [ ] Create Docker container
-- [ ] Add Kubernetes deployment manifests
-- [ ] Support horizontal scaling
-- [ ] Add load balancing
+### 5.2 Cloud Deployment ✅ Complete
+- [x] Dockerfile - Multi-stage build with Node.js 20 Alpine
+- [x] docker-compose.yml - Local dev with Redis for session storage
+- [x] Kubernetes manifests - Namespace, ConfigMap, Deployment, Service, HPA, Ingress
+- [x] Health endpoints - /health, /ready, /live, /metrics (Prometheus format)
+- [x] Horizontal Pod Autoscaler - Scale 2-10 pods based on CPU/memory
+- [x] WebSocket sticky sessions via Ingress annotations
 
-### 5.3 Spectator Mode 🔲
-- [ ] Read-only WebSocket connections
-- [ ] Efficient state diffing for bandwidth
-- [ ] Support many concurrent spectators
-- [ ] Add latency-based quality adjustment
+### 5.3 Network Security ✅ Complete
+- [x] Add secure WebSocket (wss://) support via TLS configuration
+- [x] Implement JWT authentication tokens with HMAC signing
+- [x] Add connection encryption (TLS 1.2/1.3 with secure cipher suites)
+- [x] Support NAT traversal / TURN servers (ICE candidate handling, signaling)
+- [x] SecurityManager - TLS config, JWT generation/validation, token refresh
+- [x] TURNManager - ICE servers, time-limited credentials, peer connections
+- [x] 83 tests for security and TURN modules
 
 ---
 
@@ -200,7 +208,7 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 - [ ] Consider Socket.io as alternative to raw ws
 - [ ] Add WebSocket compression (permessage-deflate)
 - [ ] Profile memory usage with many connections
-- [ ] Add metrics/tracing integration
+- [x] Add metrics/tracing integration (Prometheus format)
 
 ---
 
@@ -209,7 +217,7 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 ```
 src/
 ├── websocket/
-│   ├── server.ts          ✅ WebSocket server with heartbeat, client tracking
+│   ├── server.ts          ✅ WebSocket server with TLS, JWT, health endpoints
 │   ├── client.ts          ✅ AI agent client with heartbeat, exponential backoff
 │   ├── index.ts           ✅ Module exports
 │   ├── router.ts          ✅ Command routing with rate limiting
@@ -220,7 +228,12 @@ src/
 │   ├── agents.ts          ✅ Agent identity, roles, sessions, metrics
 │   ├── turns.ts           ✅ Turn management (5 modes: FREE, ROUND_ROBIN, etc.)
 │   ├── coordination.ts    ✅ Inter-agent messaging, locks, barriers, teams
-│   └── sessions.ts        ✅ Game sessions for AI-vs-AI multiplayer
+│   ├── sessions.ts        ✅ Game sessions for AI-vs-AI multiplayer
+│   ├── differ.ts          ✅ JSON Patch RFC 6902 state diffing
+│   ├── spectator.ts       ✅ SpectatorManager with quality tiers
+│   ├── chat.ts            ✅ ChatManager with moderation, reactions
+│   ├── security.ts        ✅ TLS/WSS config, JWT auth, token validation
+│   └── turn.ts            ✅ TURN/STUN NAT traversal, ICE signaling
 ├── training/
 │   ├── index.ts           ✅ Module exports
 │   ├── recorder.ts        ✅ SessionRecorder for game session recording
@@ -228,16 +241,31 @@ src/
 │   ├── replay.ts          ✅ ReplayEngine with playback controls
 │   ├── analytics.ts       ✅ AnalyticsEngine with Elo ratings, agent stats
 │   └── abtesting.ts       ✅ ABTestFramework for AI strategy comparison
-├── ai/
-│   ├── actions.ts         🔲 High-level action definitions (future)
-│   └── queries.ts         🔲 Query handlers (merged into websocket/queries.ts)
+├── ui/
+│   ├── components/
+│   │   ├── index.ts       ✅ Component exports
+│   │   ├── ChatPanel.tsx  ✅ Chat UI with messages, reactions, input
+│   │   └── SpectatorBar.tsx ✅ Spectator count, quality, quick reactions
+│   └── games/
+│       ├── Snake.tsx      ✅ Uses createSnakeState()
+│       ├── DinoRun.tsx    ✅ Uses createDinoState()
+│       └── TicTacToe.tsx  ✅ Uses createTicTacToeState() + WebSocket mode
 ├── core/
 │   ├── GameStateLogger.ts ✅ Broadcasts via WebSocket + file
 │   └── ...
-├── ui/games/
-│   ├── Snake.tsx          ✅ Uses createSnakeState()
-│   ├── DinoRun.tsx        ✅ Uses createDinoState()
-│   ├── TicTacToe.tsx      ✅ Uses createTicTacToeState() + WebSocket mode
+k8s/                       ✅ Kubernetes deployment manifests
+├── namespace.yaml         ✅ liku-ai namespace
+├── configmap.yaml         ✅ Application configuration
+├── deployment.yaml        ✅ Main app deployment with probes
+├── service.yaml           ✅ ClusterIP + headless services
+├── hpa.yaml               ✅ Horizontal Pod Autoscaler (2-10 pods)
+├── redis.yaml             ✅ Redis for session storage
+├── ingress.yaml           ✅ NGINX Ingress with WebSocket support
+└── kustomization.yaml     ✅ Kustomize configuration
+Dockerfile                 ✅ Multi-stage production build
+Dockerfile.dev             ✅ Development build with hot reload
+docker-compose.yml         ✅ Local dev stack with Redis
+.dockerignore              ✅ Docker build exclusions
 │   └── ...
 └── ...existing files...
 ```
@@ -297,7 +325,7 @@ interface LikuAIConfig {
 | Command Latency | <10ms | ✅ ~2ms |
 | Concurrent Clients | 100+ | TBD |
 | Memory per Client | <1MB | TBD |
-| Test Coverage | >80% | ✅ ~95% (300 tests) |
+| Test Coverage | >80% | ✅ ~95% (476 tests) |
 
 ---
 
@@ -310,8 +338,8 @@ interface LikuAIConfig {
 | RC (Multi-Agent) | Feb 2025 | ✅ Complete |
 | 2.0.0 Stable | Mar 2025 | 🔲 Not Started |
 | 2.1.0 Training | Q2 2025 | ✅ Complete |
-| 2.2.0 Remote | Q3 2025 | 🔲 Not Started |
+| 2.2.0 Remote (5.1-5.3) | Q3 2025 | ✅ Complete |
 
 ---
 
-*Last Updated: December 1, 2025*
+*Last Updated: June 2025*

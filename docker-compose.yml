@@ -1,0 +1,94 @@
+# =============================================================================
+# Liku-AI Docker Compose
+# Local development and testing setup
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Main Application
+  # ---------------------------------------------------------------------------
+  liku:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: liku-ai
+    ports:
+      - "3847:3847"
+    environment:
+      - NODE_ENV=production
+      - LIKU_WS_PORT=3847
+      - LIKU_WS_HOST=0.0.0.0
+      - LIKU_DATA_DIR=/data
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - liku-data:/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - liku-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "const ws = new (require('ws'))('ws://localhost:3847'); ws.on('open', () => { ws.close(); process.exit(0); }); ws.on('error', () => process.exit(1)); setTimeout(() => process.exit(1), 4000);"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis - Session storage and pub/sub for horizontal scaling
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: liku-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    restart: unless-stopped
+    networks:
+      - liku-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Development Mode (with hot reload)
+  # ---------------------------------------------------------------------------
+  liku-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: liku-ai-dev
+    ports:
+      - "3847:3847"
+    environment:
+      - NODE_ENV=development
+      - LIKU_WS_PORT=3847
+      - LIKU_WS_HOST=0.0.0.0
+    volumes:
+      - .:/app
+      - /app/node_modules  # Prevent overwriting node_modules
+    profiles:
+      - dev
+    networks:
+      - liku-network
+
+# -----------------------------------------------------------------------------
+# Networks
+# -----------------------------------------------------------------------------
+networks:
+  liku-network:
+    driver: bridge
+
+# -----------------------------------------------------------------------------
+# Volumes
+# -----------------------------------------------------------------------------
+volumes:
+  liku-data:
+    driver: local
+  redis-data:
+    driver: local

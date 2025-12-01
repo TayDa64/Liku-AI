@@ -1,0 +1,10 @@
+# =============================================================================
+# Liku-AI Kubernetes Namespace
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: liku-ai
+  labels:
+    app.kubernetes.io/name: liku-ai
+    app.kubernetes.io/component: namespace
