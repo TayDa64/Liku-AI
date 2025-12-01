@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { db } from '../../services/DatabaseService.js';
-import { logGameState } from '../../core/GameStateLogger.js';
+import { logGameState, broadcastEvent } from '../../core/GameStateLogger.js';
+import { createDinoState } from '../../websocket/state.js';
+import { GameEventType } from '../../websocket/protocol.js';
 
 const GAME_WIDTH = 60;
 const GAME_HEIGHT = 12;
@@ -395,8 +397,21 @@ const DinoRun = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diffic
 			controls = "SPACE or UP to jump, Q/ESC to quit.";
 		}
 
-		logGameState("Playing DinoRun", status, visualState, controls);
-	}, [dinoY, obstacles, score, gameState, message, velocity]);
+		// Create structured state for AI decision making
+		const structuredState = createDinoState({
+			isPlaying: gameState === 'PLAYING',
+			isGameOver: gameState === 'GAME_OVER',
+			isCountdown: gameState === 'COUNTDOWN',
+			countdownValue: countdown,
+			score,
+			dinoY: Math.round(dinoY),
+			velocity,
+			obstacles: obstacles.map(o => ({ x: Math.round(o.x), y: o.y, type: o.type })),
+			dinoX: DINO_X,
+		});
+
+		logGameState("Playing DinoRun", status, visualState, controls, structuredState);
+	}, [dinoY, obstacles, score, gameState, message, velocity, countdown]);
 	// ------------------------
 
 	// Rendering Logic

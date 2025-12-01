@@ -4,6 +4,8 @@ import meow from 'meow';
 import fs from 'node:fs';
 import path from 'node:path';
 import GameHub from './ui/LikuTUI.js';
+import { wsServer } from './websocket/server.js';
+import { setWebSocketEnabled, setFileLoggingEnabled } from './core/GameStateLogger.js';
 
 // State file path for AI visibility
 const STATE_FILE = path.join(process.cwd(), 'likubuddy-state.txt');
@@ -66,20 +68,37 @@ const cli = meow(`
 	  $ liku
 
 	Description
-	  LikuBuddy - Terminal Based ASCII Game Hub
+	  LikuBuddy - Terminal Based ASCII Game Hub with AI WebSocket Support
 
 	Options
-		--ai  Enable AI interaction mode
+		--ai           Enable AI interaction mode
+		--no-websocket Disable WebSocket server (legacy file-only mode)
+		--no-file      Disable state file logging
+		--port <num>   WebSocket server port (default: 3847)
 
 	Examples
 	  $ liku
 	  $ liku --ai
+	  $ liku --no-websocket
+	  $ liku --port 8080
 `, {
 	importMeta: import.meta,
 	flags: {
 		ai: {
 			type: 'boolean',
-		}
+		},
+		noWebsocket: {
+			type: 'boolean',
+			default: false,
+		},
+		noFile: {
+			type: 'boolean',
+			default: false,
+		},
+		port: {
+			type: 'number',
+			default: 3847,
+		},
 	}
 });
 
@@ -117,36 +136,122 @@ const clearStateFile = () => {
   }
 };
 
+// ============================================================
+// WebSocket Server Management
+// ============================================================
+const websocketEnabled = !cli.flags.noWebsocket;
+const fileLoggingEnabled = !cli.flags.noFile;
+const wsPort = cli.flags.port;
+
+// Configure state logging based on flags
+setWebSocketEnabled(websocketEnabled);
+setFileLoggingEnabled(fileLoggingEnabled);
+
+// Start WebSocket server if enabled
+const startWebSocketServer = async (): Promise<void> => {
+  if (!websocketEnabled) {
+    originalConsoleLog('[Liku] WebSocket server disabled (--no-websocket flag)');
+    return;
+  }
+
+  try {
+    // Create new server with custom port if specified
+    if (wsPort !== 3847) {
+      const { LikuWebSocketServer } = await import('./websocket/server.js');
+      const customServer = new LikuWebSocketServer({ port: wsPort });
+      await customServer.start();
+      
+      // Replace singleton (hacky but works for now)
+      (globalThis as Record<string, unknown>).__likuWsServer = customServer;
+    } else {
+      await wsServer.start();
+    }
+    
+    // Setup command handlers
+    wsServer.on('key', (key: string, clientId: string) => {
+      // Keys will be handled by the game components via synthetic events
+      // For now, log them - actual handling is done in LikuTUI
+      logsBuffer.push(`[WS] Key from ${clientId}: ${key}`);
+    });
+
+    wsServer.on('action', (action: string, clientId: string) => {
+      logsBuffer.push(`[WS] Action from ${clientId}: ${action}`);
+    });
+
+    wsServer.on('query', (query: string, clientId: string, callback: (result: unknown) => void) => {
+      // Handle queries
+      if (query === 'stats') {
+        callback(wsServer.getStats());
+      } else if (query === 'history') {
+        const { getStateHistory } = require('./core/GameStateLogger.js');
+        callback(getStateHistory(50));
+      } else {
+        callback({ error: 'Unknown query', query });
+      }
+    });
+
+  } catch (err) {
+    originalConsoleError('[Liku] Failed to start WebSocket server:', err);
+  }
+};
+
+const stopWebSocketServer = async (): Promise<void> => {
+  if (websocketEnabled && wsServer.isRunning) {
+    try {
+      await wsServer.stop();
+    } catch (err) {
+      // Ignore stop errors during shutdown
+    }
+  }
+};
+
 // Initialize fullscreen mode BEFORE React renders
 initFullscreen();
 
-// Handle exit cleanup - clear state file and restore terminal
-const cleanup = () => {
+// Handle exit cleanup - clear state file, stop WebSocket, and restore terminal
+const cleanup = async () => {
+  await stopWebSocketServer();
   clearStateFile();
   exitFullscreen();
 };
 
-process.on('exit', cleanup);
-process.on('SIGINT', () => { cleanup(); process.exit(0); });
-process.on('SIGTERM', () => { cleanup(); process.exit(0); });
+// Synchronous cleanup wrapper for process handlers
+const cleanupSync = () => {
+  stopWebSocketServer().catch(() => {});
+  clearStateFile();
+  exitFullscreen();
+};
+
+process.on('exit', cleanupSync);
+process.on('SIGINT', () => { cleanupSync(); process.exit(0); });
+process.on('SIGTERM', () => { cleanupSync(); process.exit(0); });
 process.on('uncaughtException', (err) => { 
-  cleanup(); 
+  cleanupSync(); 
   console.error('Uncaught exception:', err);
   process.exit(1); 
 });
 
 interface AppProps {
 	ai?: boolean;
+	wsEnabled?: boolean;
 }
 
-const App: React.FC<AppProps> = ({ ai = false }) => {
+const App: React.FC<AppProps> = ({ ai = false, wsEnabled = true }) => {
 	const { exit } = useApp();
 	const { stdin, setRawMode } = useStdin();
 	const [actionQueue, setActionQueue] = useState<string[]>([]);
+	const [wsReady, setWsReady] = useState(false);
 
 	useEffect(() => {
 		// Guard streams (prevents console.log from corrupting TUI)
 		guardStreams();
+
+		// Start WebSocket server
+		if (wsEnabled) {
+			startWebSocketServer().then(() => {
+				setWsReady(true);
+			});
+		}
 
 		if (ai) {
 			setRawMode(false);
@@ -169,7 +274,7 @@ const App: React.FC<AppProps> = ({ ai = false }) => {
 		return () => {
 			restoreStreams();
 		};
-	}, [ai, exit, stdin, setRawMode]);
+	}, [ai, exit, stdin, setRawMode, wsEnabled]);
 
 	return <GameHub ai={ai} actionQueue={actionQueue} setActionQueue={setActionQueue} />;
 };
@@ -179,7 +284,7 @@ const App: React.FC<AppProps> = ({ ai = false }) => {
 // - patchConsole: false - We handle console patching ourselves
 // Note: Cursor is hidden via ANSI codes in initFullscreen()
 // ============================================================
-const inkInstance = render(<App ai={cli.flags.ai} />, {
+const inkInstance = render(<App ai={cli.flags.ai} wsEnabled={websocketEnabled} />, {
 	patchConsole: false,  // We handle console patching ourselves
 });
 

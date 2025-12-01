@@ -3,7 +3,9 @@ import { Box, Text, useInput } from 'ink';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../../services/DatabaseService.js';
-import { logGameState } from '../../core/GameStateLogger.js';
+import { logGameState, broadcastEvent } from '../../core/GameStateLogger.js';
+import { createSnakeState } from '../../websocket/state.js';
+import { GameEventType } from '../../websocket/protocol.js';
 
 const FIELD_SIZE = 20;
 const INITIAL_SNAKE = [
@@ -289,7 +291,7 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 		if (countdown !== null) status = `COUNTDOWN: ${countdown}... Get Ready!`;
 		else if (gameOver) status += " | GAME OVER";
 
-		// Render grid for AI
+		// Render grid for AI (ASCII visualization)
 		let visualState = "";
 		for (let y = 0; y < FIELD_SIZE; y++) {
 			let row = "";
@@ -319,7 +321,7 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 		
 		// Danger warnings
 		const nextHead = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
-		const willHitWall = nextHead.x < 0 || nextHead.x >= 20 || nextHead.y < 0 || nextHead.y >= 20;
+		const willHitWall = nextHead.x < 0 || nextHead.x >= FIELD_SIZE || nextHead.y < 0 || nextHead.y >= FIELD_SIZE;
 		const willHitSelf = snake.some(s => s.x === nextHead.x && s.y === nextHead.y);
 		if (willHitWall || willHitSelf) {
 			visualState += `\n[DANGER! TURN NOW - will hit ${willHitWall ? 'WALL' : 'SELF'}]`;
@@ -330,8 +332,23 @@ const Snake = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficul
 			visualState = `\n*** COUNTDOWN: ${countdown} ***\n\nGame starts in ${countdown} seconds.\nYou can set direction NOW before game begins!\n\n` + visualState;
 		}
 
-		logGameState("Playing Snake", status, visualState);
-	}, [snake, food, score, level, xp, gameOver, direction, countdown]);
+		// Create structured state for AI decision making
+		const structuredState = createSnakeState({
+			isPlaying: !gameOver && gameStarted,
+			isGameOver: gameOver,
+			isCountdown: countdown !== null,
+			countdownValue: countdown,
+			score,
+			level,
+			xp,
+			fieldSize: FIELD_SIZE,
+			snake,
+			direction: dirName as 'UP' | 'DOWN' | 'LEFT' | 'RIGHT',
+			food: { x: food.x, y: food.y, type: food.type },
+		});
+
+		logGameState("Playing Snake", status, visualState, "Arrow keys to move, Q to quit.", structuredState);
+	}, [snake, food, score, level, xp, gameOver, gameStarted, direction, countdown]);
 	// ------------------------
 
 	// Render the grid

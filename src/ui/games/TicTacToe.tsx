@@ -1,10 +1,39 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { db } from '../../services/DatabaseService.js';
 import { logGameState } from '../../core/GameStateLogger.js';
+import { createTicTacToeState } from '../../websocket/state.js';
+import { 
+	GameSessionManager, 
+	gameSessionManager, 
+	TicTacToeSessionState,
+	TicTacToeSlot,
+	PlayerSlot,
+} from '../../websocket/sessions.js';
 
 type Player = 'X' | 'O' | null;
 type BoardState = Player[];
+
+/**
+ * Game mode types:
+ * - 'local': Traditional local gameplay with built-in AI
+ * - 'websocket': AI-vs-AI mode using WebSocket sessions
+ * - 'spectate': Watch an ongoing AI-vs-AI game
+ */
+export type TicTacToeMode = 'local' | 'websocket' | 'spectate';
+
+/**
+ * Props for TicTacToe component
+ */
+export interface TicTacToeProps {
+	onExit: () => void;
+	difficulty?: 'easy' | 'medium' | 'hard' | 'ai';
+	mode?: TicTacToeMode;
+	sessionId?: string; // For joining existing session
+	sessionManager?: GameSessionManager; // Allow DI for testing
+	agentId?: string; // Agent ID for WebSocket mode
+	onSessionCreated?: (sessionId: string) => void; // Callback when session is created
+}
 
 const WINNING_COMBINATIONS = [
 	[0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
@@ -12,12 +41,152 @@ const WINNING_COMBINATIONS = [
 	[0, 4, 8], [2, 4, 6]             // Diagonals
 ];
 
-const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, difficulty?: 'easy' | 'medium' | 'hard' | 'ai' }) => {
+/**
+ * TicTacToe Game Component
+ * 
+ * Supports three modes:
+ * - 'local': Play against built-in AI (Liku)
+ * - 'websocket': AI-vs-AI mode with WebSocket session management
+ * - 'spectate': Watch an ongoing game
+ */
+const TicTacToe = ({ 
+	onExit, 
+	difficulty = 'medium',
+	mode = 'local',
+	sessionId: initialSessionId,
+	sessionManager = gameSessionManager,
+	agentId = 'local-player',
+	onSessionCreated,
+}: TicTacToeProps) => {
 	const [board, setBoard] = useState<BoardState>(Array(9).fill(null));
 	const [isPlayerTurn, setIsPlayerTurn] = useState(true); // Player is always X and goes first
 	const [cursor, setCursor] = useState(4); // Start in center
 	const [winner, setWinner] = useState<Player | 'DRAW' | null>(null);
 	const [message, setMessage] = useState<string | null>(null);
+	
+	// WebSocket mode state
+	const [sessionId, setSessionId] = useState<string | null>(initialSessionId || null);
+	const [playerSlot, setPlayerSlot] = useState<TicTacToeSlot | null>(null);
+	const [sessionState, setSessionState] = useState<TicTacToeSessionState | null>(null);
+	const [waitingForPlayer, setWaitingForPlayer] = useState(false);
+
+	// Convert session state to flat board array for compatibility
+	const boardFromSession = useMemo(() => {
+		if (!sessionState) return null;
+		const flat: BoardState = [];
+		for (let row = 0; row < 3; row++) {
+			for (let col = 0; col < 3; col++) {
+				flat.push(sessionState.board[row][col]);
+			}
+		}
+		return flat;
+	}, [sessionState]);
+
+	// Use session board in websocket mode, local board otherwise
+	const activeBoard = mode === 'local' ? board : (boardFromSession || board);
+	const activeIsPlayerTurn = mode === 'local' 
+		? isPlayerTurn 
+		: (sessionState?.currentPlayer === playerSlot);
+	const activeWinner = mode === 'local' 
+		? winner 
+		: sessionState?.winner;
+
+	// Setup WebSocket session on mount (websocket mode only)
+	useEffect(() => {
+		if (mode !== 'websocket' && mode !== 'spectate') return;
+
+		const handleGameStarted = (sId: string, state: TicTacToeSessionState) => {
+			if (sId === sessionId) {
+				setSessionState(state);
+				setWaitingForPlayer(false);
+			}
+		};
+
+		const handleTurnChanged = (sId: string, slot: PlayerSlot, _agentId: string) => {
+			if (sId === sessionId) {
+				setSessionState(prev => prev ? { ...prev, currentPlayer: slot as TicTacToeSlot } : prev);
+			}
+		};
+
+		const handleMoveMade = (sId: string, data: { player: PlayerSlot; move: { row: number; col: number }; state: TicTacToeSessionState }) => {
+			if (sId === sessionId) {
+				setSessionState(data.state);
+			}
+		};
+
+		const handleGameEnded = (sId: string, data: { winner: TicTacToeSlot | 'draw'; state: TicTacToeSessionState }) => {
+			if (sId === sessionId) {
+				setSessionState(data.state);
+				// Map winner for display
+				if (data.winner === 'draw') {
+					setWinner('DRAW');
+				} else {
+					setWinner(data.winner);
+				}
+			}
+		};
+
+		sessionManager.on('gameStarted', handleGameStarted);
+		sessionManager.on('turnChanged', handleTurnChanged);
+		sessionManager.on('moveMade', handleMoveMade);
+		sessionManager.on('gameEnded', handleGameEnded);
+
+		// Create or join session
+		if (!sessionId) {
+			// Create new session
+			const session = sessionManager.createSession({
+				gameType: 'tictactoe',
+				mode: 'ai_vs_ai',
+				turnTimeMs: 30000,
+				allowSpectators: true,
+			});
+			setSessionId(session.id);
+			setWaitingForPlayer(true);
+			onSessionCreated?.(session.id);
+
+			// Join as first player
+			const result = sessionManager.joinSession(
+				session.id,
+				agentId,
+				`Agent_${agentId.slice(0, 8)}`,
+				mode === 'spectate' ? 'spectator' : 'ai',
+				'X'
+			);
+			if (result.success && result.slot) {
+				setPlayerSlot(result.slot as TicTacToeSlot);
+			}
+		} else {
+			// Join existing session
+			const result = sessionManager.joinSession(
+				sessionId,
+				agentId,
+				`Agent_${agentId.slice(0, 8)}`,
+				mode === 'spectate' ? 'spectator' : 'ai'
+			);
+			if (result.success && result.slot) {
+				setPlayerSlot(result.slot as TicTacToeSlot);
+			}
+			
+			// Get current state
+			const session = sessionManager.getSession(sessionId);
+			if (session) {
+				setSessionState(session.state as TicTacToeSessionState);
+				setWaitingForPlayer(session.status === 'waiting');
+			}
+		}
+
+		return () => {
+			sessionManager.off('gameStarted', handleGameStarted);
+			sessionManager.off('turnChanged', handleTurnChanged);
+			sessionManager.off('moveMade', handleMoveMade);
+			sessionManager.off('gameEnded', handleGameEnded);
+			
+			// Leave session on unmount
+			if (sessionId) {
+				sessionManager.leaveSession(sessionId, agentId);
+			}
+		};
+	}, [mode, sessionId, agentId, sessionManager, onSessionCreated]);
 
 	const checkWinner = (currentBoard: BoardState): Player | 'DRAW' | null => {
 		for (const combo of WINNING_COMBINATIONS) {
@@ -166,14 +335,36 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 			? "Enter to Play Again, Q to Quit."
 			: "Arrows to move cursor, Enter to place X. Q to Quit.";
 
-		logGameState("Playing Tic-Tac-Toe", status, visualState, controls);
+		// Create structured state for AI with minimax recommendations
+		const boardGrid: Array<Array<'X' | 'O' | null>> = [
+			[board[0], board[1], board[2]],
+			[board[3], board[4], board[5]],
+			[board[6], board[7], board[8]],
+		];
+		
+		const structuredState = createTicTacToeState({
+			board: boardGrid,
+			currentPlayer: isPlayerTurn ? 'X' : 'O',
+			isPlayerTurn,
+			isPlaying: !winner,
+			isGameOver: !!winner,
+			winner: winner === 'DRAW' ? 'draw' : winner,
+		});
+
+		// Log with structured data for AI agents
+		logGameState("Playing Tic-Tac-Toe", status, visualState, controls, structuredState);
 	}, [board, cursor, isPlayerTurn, winner]);
 	// ------------------------
 
 	useInput((input, key) => {
-		if (winner) {
-			if (key.return) {
-				// Restart
+		// Use active winner for game over state
+		const currentWinner = mode === 'local' ? winner : activeWinner;
+		const currentBoard = activeBoard;
+		const currentIsPlayerTurn = activeIsPlayerTurn;
+
+		if (currentWinner) {
+			if (key.return && mode === 'local') {
+				// Restart (local mode only)
 				setBoard(Array(9).fill(null));
 				setWinner(null);
 				setIsPlayerTurn(true);
@@ -184,7 +375,16 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 			return;
 		}
 
-		if (!isPlayerTurn) return; // Wait for Liku
+		// In spectate mode, only allow exit
+		if (mode === 'spectate') {
+			if (key.escape || input === 'q') {
+				onExit();
+			}
+			return;
+		}
+
+		// Wait for turn (applies to both local and websocket mode)
+		if (!currentIsPlayerTurn) return;
 
 		if (key.upArrow && cursor >= 3) setCursor(c => c - 3);
 		if (key.downArrow && cursor <= 5) setCursor(c => c + 3);
@@ -192,17 +392,29 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 		if (key.rightArrow && cursor % 3 !== 2) setCursor(c => c + 1);
 
 		if (key.return || input === ' ') {
-			if (board[cursor] === null) {
-				const newBoard = [...board];
-				newBoard[cursor] = 'X';
-				setBoard(newBoard);
-				
-				const result = checkWinner(newBoard);
-				if (result) {
-					setWinner(result);
-					saveResult(result);
+			if (currentBoard[cursor] === null) {
+				if (mode === 'websocket' && sessionId) {
+					// Submit move via session manager
+					const row = Math.floor(cursor / 3);
+					const col = cursor % 3;
+					const result = sessionManager.submitMove(sessionId, agentId, { row, col });
+					
+					if (!result.success) {
+						setMessage(result.error || 'Invalid move');
+					}
 				} else {
-					setIsPlayerTurn(false);
+					// Local mode
+					const newBoard = [...board];
+					newBoard[cursor] = 'X';
+					setBoard(newBoard);
+					
+					const result = checkWinner(newBoard);
+					if (result) {
+						setWinner(result);
+						saveResult(result);
+					} else {
+						setIsPlayerTurn(false);
+					}
 				}
 			}
 		}
@@ -213,8 +425,8 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 	});
 
 	const renderCell = (i: number) => {
-		const val = board[i];
-		const isSelected = cursor === i;
+		const val = activeBoard[i];
+		const isSelected = cursor === i && mode !== 'spectate';
 		
 		// Use ASCII/Text instead of emojis to prevent rendering artifacts on Windows
 		let char = '   ';
@@ -233,11 +445,35 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 		);
 	};
 
+	// Determine title based on mode
+	const titleText = mode === 'websocket' 
+		? `🤖 AI vs AI TicTacToe (${playerSlot || '?'}) 🤖`
+		: mode === 'spectate'
+			? '👁️ Spectating TicTacToe 👁️'
+			: '❌ Tic-Tac-Toe vs Liku ⭕';
+
+	// Determine current winner for display
+	const displayWinner = mode === 'local' ? winner : activeWinner;
+
 	return (
 		<Box flexDirection="column" alignItems="center">
 			<Box marginBottom={1}>
-				<Text bold color="yellow">❌ Tic-Tac-Toe vs Liku ⭕</Text>
+				<Text bold color="yellow">{titleText}</Text>
 			</Box>
+
+			{/* Session info for websocket mode */}
+			{mode !== 'local' && sessionId && (
+				<Box marginBottom={1}>
+					<Text dimColor>Session: {sessionId.slice(0, 16)}...</Text>
+				</Box>
+			)}
+
+			{/* Waiting for player message */}
+			{waitingForPlayer && (
+				<Box marginBottom={1}>
+					<Text color="yellow">⏳ Waiting for opponent to join...</Text>
+				</Box>
+			)}
 
 			<Box flexDirection="column">
 				{[0, 1, 2].map(row => (
@@ -248,20 +484,36 @@ const TicTacToe = ({ onExit, difficulty = 'medium' }: { onExit: () => void, diff
 			</Box>
 
 			<Box marginTop={1}>
-				{winner ? (
+				{displayWinner ? (
 					<Box flexDirection="column" alignItems="center">
-						{winner === 'DRAW' && renderDrawArt()}
-						<Text bold color={winner === 'X' ? 'green' : winner === 'O' ? 'red' : 'yellow'}>
-							{message || (winner === 'DRAW' ? "It's a Draw!" : `${winner === 'X' ? 'You' : 'Liku'} Won!`)}
+						{displayWinner === 'DRAW' || displayWinner === 'draw' ? renderDrawArt() : null}
+						<Text bold color={displayWinner === 'X' ? 'green' : displayWinner === 'O' ? 'red' : 'yellow'}>
+							{message || (displayWinner === 'DRAW' || displayWinner === 'draw' 
+								? "It's a Draw!" 
+								: mode === 'local'
+									? `${displayWinner === 'X' ? 'You' : 'Liku'} Won!`
+									: `${displayWinner} Won!`)}
 						</Text>
-						<Text dimColor>Press Enter to Play Again, Q to Quit</Text>
+						<Text dimColor>
+							{mode === 'local' ? 'Press Enter to Play Again, Q to Quit' : 'Press Q to Exit'}
+						</Text>
 					</Box>
 				) : (
 					<Box flexDirection="column" alignItems="center">
-						<Text color={isPlayerTurn ? 'cyan' : 'magenta'}>
-							{isPlayerTurn ? "Your Turn (X)" : "Liku is thinking... (O)"}
+						{mode === 'spectate' ? (
+							<Text color="gray">
+								{sessionState ? `${sessionState.currentPlayer}'s Turn` : 'Watching...'}
+							</Text>
+						) : (
+							<Text color={activeIsPlayerTurn ? 'cyan' : 'magenta'}>
+								{mode === 'websocket'
+									? (activeIsPlayerTurn ? `Your Turn (${playerSlot})` : `Opponent's Turn`)
+									: (isPlayerTurn ? "Your Turn (X)" : "Liku is thinking... (O)")}
+							</Text>
+						)}
+						<Text dimColor>
+							{mode === 'spectate' ? 'Q to Exit' : 'Arrows to move • Enter to place'}
 						</Text>
-						<Text dimColor>Arrows to move • Enter to place</Text>
 					</Box>
 				)}
 			</Box>
