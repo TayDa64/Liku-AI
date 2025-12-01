@@ -1045,11 +1045,11 @@ export class LikuWebSocketServer extends EventEmitter {
   }
 
   /**
-   * Send message to an agent by agent ID
+   * Send message to an agent by agent ID (checks both agentId and likuId)
    */
   sendToAgent(agentId: string, message: AIResponse): boolean {
     for (const [, client] of this.clients) {
-      if (client.agentId === agentId) {
+      if (client.agentId === agentId || client.likuId === agentId) {
         this.sendToClient(client, message);
         return true;
       }
