@@ -230,6 +230,83 @@ class DatabaseService {
             INSERT OR IGNORE INTO learn_settings (id) VALUES (1)
         `);
 
+        // ============================================================================
+        // Training & Analytics Tables (Phase 4)
+        // ============================================================================
+
+        // Game Sessions Table - stores recorded game sessions
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS training_sessions (
+                id TEXT PRIMARY KEY,
+                game_type TEXT NOT NULL,
+                start_time INTEGER NOT NULL,
+                end_time INTEGER,
+                frames TEXT NOT NULL,
+                actions TEXT NOT NULL,
+                metadata TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // Agent Statistics Table - tracks per-agent performance
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS agent_stats (
+                agent_id TEXT PRIMARY KEY,
+                agent_type TEXT DEFAULT 'unknown',
+                games_played INTEGER DEFAULT 0,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                draws INTEGER DEFAULT 0,
+                total_moves INTEGER DEFAULT 0,
+                avg_move_time REAL DEFAULT 0,
+                rating INTEGER DEFAULT 1200,
+                peak_rating INTEGER DEFAULT 1200,
+                rating_history TEXT,
+                game_metrics TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+
+        // A/B Testing Experiments Table
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS experiments (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT,
+                variants TEXT NOT NULL,
+                metrics TEXT NOT NULL,
+                status TEXT DEFAULT 'draft',
+                min_sample_size INTEGER DEFAULT 30,
+                confidence_level REAL DEFAULT 0.95,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                started_at DATETIME,
+                completed_at DATETIME
+            )
+        `);
+
+        // Experiment Samples Table - individual results per variant
+        this.db.exec(`
+            CREATE TABLE IF NOT EXISTS experiment_samples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                experiment_id TEXT NOT NULL,
+                variant_id TEXT NOT NULL,
+                session_id TEXT,
+                agent_id TEXT,
+                outcome TEXT,
+                metrics TEXT,
+                timestamp INTEGER NOT NULL,
+                FOREIGN KEY(experiment_id) REFERENCES experiments(id)
+            )
+        `);
+
+        // Create indexes for common queries
+        this.db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_sessions_game_type ON training_sessions(game_type);
+            CREATE INDEX IF NOT EXISTS idx_sessions_start_time ON training_sessions(start_time);
+            CREATE INDEX IF NOT EXISTS idx_samples_experiment ON experiment_samples(experiment_id);
+            CREATE INDEX IF NOT EXISTS idx_samples_variant ON experiment_samples(variant_id);
+        `);
+
         this.initialized = true;
     }
 
@@ -680,6 +757,416 @@ class DatabaseService {
      */
     public close(): void {
         this.db.close();
+    }
+
+    // ============================================================================
+    // Training & Analytics Methods (Phase 4)
+    // ============================================================================
+
+    /**
+     * Store a recorded game session
+     */
+    public async saveTrainingSession(session: {
+        id: string;
+        gameType: string;
+        startTime: number;
+        endTime?: number;
+        frames: any[];
+        actions: any[];
+        metadata?: Record<string, unknown>;
+    }): Promise<void> {
+        this.db.prepare(`
+            INSERT OR REPLACE INTO training_sessions 
+            (id, game_type, start_time, end_time, frames, actions, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            session.id,
+            session.gameType,
+            session.startTime,
+            session.endTime ?? null,
+            JSON.stringify(session.frames),
+            JSON.stringify(session.actions),
+            session.metadata ? JSON.stringify(session.metadata) : null
+        );
+    }
+
+    /**
+     * Get a training session by ID
+     */
+    public async getTrainingSession(id: string): Promise<{
+        id: string;
+        gameType: string;
+        startTime: number;
+        endTime: number | null;
+        frames: any[];
+        actions: any[];
+        metadata: Record<string, unknown> | null;
+    } | null> {
+        const row = this.db.prepare(
+            'SELECT * FROM training_sessions WHERE id = ?'
+        ).get(id) as any;
+
+        if (!row) return null;
+
+        return {
+            id: row.id,
+            gameType: row.game_type,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            frames: JSON.parse(row.frames),
+            actions: JSON.parse(row.actions),
+            metadata: row.metadata ? JSON.parse(row.metadata) : null
+        };
+    }
+
+    /**
+     * List training sessions with optional filters
+     */
+    public async listTrainingSessions(options?: {
+        gameType?: string;
+        limit?: number;
+        offset?: number;
+        startAfter?: number;
+        startBefore?: number;
+    }): Promise<Array<{
+        id: string;
+        gameType: string;
+        startTime: number;
+        endTime: number | null;
+        frameCount: number;
+        actionCount: number;
+    }>> {
+        let query = 'SELECT id, game_type, start_time, end_time, frames, actions FROM training_sessions WHERE 1=1';
+        const params: any[] = [];
+
+        if (options?.gameType) {
+            query += ' AND game_type = ?';
+            params.push(options.gameType);
+        }
+        if (options?.startAfter) {
+            query += ' AND start_time >= ?';
+            params.push(options.startAfter);
+        }
+        if (options?.startBefore) {
+            query += ' AND start_time <= ?';
+            params.push(options.startBefore);
+        }
+
+        query += ' ORDER BY start_time DESC';
+
+        if (options?.limit) {
+            query += ' LIMIT ?';
+            params.push(options.limit);
+        }
+        if (options?.offset) {
+            query += ' OFFSET ?';
+            params.push(options.offset);
+        }
+
+        const rows = this.db.prepare(query).all(...params) as any[];
+
+        return rows.map(row => ({
+            id: row.id,
+            gameType: row.game_type,
+            startTime: row.start_time,
+            endTime: row.end_time,
+            frameCount: JSON.parse(row.frames).length,
+            actionCount: JSON.parse(row.actions).length
+        }));
+    }
+
+    /**
+     * Delete a training session
+     */
+    public async deleteTrainingSession(id: string): Promise<boolean> {
+        const result = this.db.prepare('DELETE FROM training_sessions WHERE id = ?').run(id);
+        return result.changes > 0;
+    }
+
+    /**
+     * Save agent statistics
+     */
+    public async saveAgentStats(stats: {
+        agentId: string;
+        agentType?: string;
+        gamesPlayed: number;
+        wins: number;
+        losses: number;
+        draws: number;
+        totalMoves: number;
+        avgMoveTime: number;
+        rating: number;
+        peakRating: number;
+        ratingHistory?: any[];
+        gameMetrics?: Record<string, number>;
+    }): Promise<void> {
+        this.db.prepare(`
+            INSERT OR REPLACE INTO agent_stats 
+            (agent_id, agent_type, games_played, wins, losses, draws, total_moves, 
+             avg_move_time, rating, peak_rating, rating_history, game_metrics, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).run(
+            stats.agentId,
+            stats.agentType ?? 'unknown',
+            stats.gamesPlayed,
+            stats.wins,
+            stats.losses,
+            stats.draws,
+            stats.totalMoves,
+            stats.avgMoveTime,
+            stats.rating,
+            stats.peakRating,
+            stats.ratingHistory ? JSON.stringify(stats.ratingHistory) : null,
+            stats.gameMetrics ? JSON.stringify(stats.gameMetrics) : null
+        );
+    }
+
+    /**
+     * Get agent statistics
+     */
+    public async getAgentStats(agentId: string): Promise<{
+        agentId: string;
+        agentType: string;
+        gamesPlayed: number;
+        wins: number;
+        losses: number;
+        draws: number;
+        totalMoves: number;
+        avgMoveTime: number;
+        rating: number;
+        peakRating: number;
+        ratingHistory: any[];
+        gameMetrics: Record<string, number>;
+    } | null> {
+        const row = this.db.prepare(
+            'SELECT * FROM agent_stats WHERE agent_id = ?'
+        ).get(agentId) as any;
+
+        if (!row) return null;
+
+        return {
+            agentId: row.agent_id,
+            agentType: row.agent_type,
+            gamesPlayed: row.games_played,
+            wins: row.wins,
+            losses: row.losses,
+            draws: row.draws,
+            totalMoves: row.total_moves,
+            avgMoveTime: row.avg_move_time,
+            rating: row.rating,
+            peakRating: row.peak_rating,
+            ratingHistory: row.rating_history ? JSON.parse(row.rating_history) : [],
+            gameMetrics: row.game_metrics ? JSON.parse(row.game_metrics) : {}
+        };
+    }
+
+    /**
+     * Get top agents by rating
+     */
+    public async getTopAgents(limit: number = 10): Promise<Array<{
+        agentId: string;
+        agentType: string;
+        rating: number;
+        winRate: number;
+    }>> {
+        const rows = this.db.prepare(`
+            SELECT agent_id, agent_type, rating, 
+                   CASE WHEN games_played > 0 
+                        THEN CAST(wins AS REAL) / games_played 
+                        ELSE 0 END as win_rate
+            FROM agent_stats 
+            WHERE games_played >= 5
+            ORDER BY rating DESC 
+            LIMIT ?
+        `).all(limit) as any[];
+
+        return rows.map(row => ({
+            agentId: row.agent_id,
+            agentType: row.agent_type,
+            rating: row.rating,
+            winRate: row.win_rate
+        }));
+    }
+
+    /**
+     * Save an A/B testing experiment
+     */
+    public async saveExperiment(experiment: {
+        id: string;
+        name: string;
+        description?: string;
+        variants: any[];
+        metrics: string[];
+        status: string;
+        minSampleSize: number;
+        confidenceLevel: number;
+        startedAt?: number;
+        completedAt?: number;
+    }): Promise<void> {
+        this.db.prepare(`
+            INSERT OR REPLACE INTO experiments 
+            (id, name, description, variants, metrics, status, min_sample_size, 
+             confidence_level, started_at, completed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            experiment.id,
+            experiment.name,
+            experiment.description ?? null,
+            JSON.stringify(experiment.variants),
+            JSON.stringify(experiment.metrics),
+            experiment.status,
+            experiment.minSampleSize,
+            experiment.confidenceLevel,
+            experiment.startedAt ?? null,
+            experiment.completedAt ?? null
+        );
+    }
+
+    /**
+     * Get an experiment by ID
+     */
+    public async getExperiment(id: string): Promise<{
+        id: string;
+        name: string;
+        description: string | null;
+        variants: any[];
+        metrics: string[];
+        status: string;
+        minSampleSize: number;
+        confidenceLevel: number;
+        createdAt: string;
+        startedAt: number | null;
+        completedAt: number | null;
+    } | null> {
+        const row = this.db.prepare(
+            'SELECT * FROM experiments WHERE id = ?'
+        ).get(id) as any;
+
+        if (!row) return null;
+
+        return {
+            id: row.id,
+            name: row.name,
+            description: row.description,
+            variants: JSON.parse(row.variants),
+            metrics: JSON.parse(row.metrics),
+            status: row.status,
+            minSampleSize: row.min_sample_size,
+            confidenceLevel: row.confidence_level,
+            createdAt: row.created_at,
+            startedAt: row.started_at,
+            completedAt: row.completed_at
+        };
+    }
+
+    /**
+     * List all experiments
+     */
+    public async listExperiments(status?: string): Promise<Array<{
+        id: string;
+        name: string;
+        status: string;
+        variantCount: number;
+        createdAt: string;
+    }>> {
+        let query = 'SELECT id, name, status, variants, created_at FROM experiments';
+        const params: any[] = [];
+
+        if (status) {
+            query += ' WHERE status = ?';
+            params.push(status);
+        }
+
+        query += ' ORDER BY created_at DESC';
+
+        const rows = this.db.prepare(query).all(...params) as any[];
+
+        return rows.map(row => ({
+            id: row.id,
+            name: row.name,
+            status: row.status,
+            variantCount: JSON.parse(row.variants).length,
+            createdAt: row.created_at
+        }));
+    }
+
+    /**
+     * Save an experiment sample
+     */
+    public async saveExperimentSample(sample: {
+        experimentId: string;
+        variantId: string;
+        sessionId?: string;
+        agentId?: string;
+        outcome?: string;
+        metrics?: Record<string, number>;
+        timestamp: number;
+    }): Promise<void> {
+        this.db.prepare(`
+            INSERT INTO experiment_samples 
+            (experiment_id, variant_id, session_id, agent_id, outcome, metrics, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        `).run(
+            sample.experimentId,
+            sample.variantId,
+            sample.sessionId ?? null,
+            sample.agentId ?? null,
+            sample.outcome ?? null,
+            sample.metrics ? JSON.stringify(sample.metrics) : null,
+            sample.timestamp
+        );
+    }
+
+    /**
+     * Get experiment samples
+     */
+    public async getExperimentSamples(experimentId: string): Promise<Array<{
+        variantId: string;
+        sessionId: string | null;
+        agentId: string | null;
+        outcome: string | null;
+        metrics: Record<string, number>;
+        timestamp: number;
+    }>> {
+        const rows = this.db.prepare(`
+            SELECT * FROM experiment_samples WHERE experiment_id = ?
+        `).all(experimentId) as any[];
+
+        return rows.map(row => ({
+            variantId: row.variant_id,
+            sessionId: row.session_id,
+            agentId: row.agent_id,
+            outcome: row.outcome,
+            metrics: row.metrics ? JSON.parse(row.metrics) : {},
+            timestamp: row.timestamp
+        }));
+    }
+
+    /**
+     * Get sample count per variant for an experiment
+     */
+    public async getExperimentSampleCounts(experimentId: string): Promise<Record<string, number>> {
+        const rows = this.db.prepare(`
+            SELECT variant_id, COUNT(*) as count 
+            FROM experiment_samples 
+            WHERE experiment_id = ?
+            GROUP BY variant_id
+        `).all(experimentId) as any[];
+
+        const counts: Record<string, number> = {};
+        for (const row of rows) {
+            counts[row.variant_id] = row.count;
+        }
+        return counts;
+    }
+
+    /**
+     * Delete an experiment and its samples
+     */
+    public async deleteExperiment(id: string): Promise<boolean> {
+        this.db.prepare('DELETE FROM experiment_samples WHERE experiment_id = ?').run(id);
+        const result = this.db.prepare('DELETE FROM experiments WHERE id = ?').run(id);
+        return result.changes > 0;
     }
 }
 

@@ -152,3 +152,69 @@ export {
   createError,
   validateMessage,
 } from './protocol.js';
+
+// State Diffing (Phase 5.1)
+export {
+  StateDiffer,
+  stateDiffer,
+  diff,
+  applyPatch,
+  validatePatch,
+  DEFAULT_DIFFER_CONFIG,
+} from './differ.js';
+export type {
+  PatchOperationType,
+  PatchOperation,
+  PatchDocument,
+  DiffResult,
+  DifferConfig,
+} from './differ.js';
+
+// Spectator System (Phase 5.1)
+export {
+  SpectatorManager,
+  getSpectatorManager,
+  resetSpectatorManager,
+  GAME_SPECTATOR_CONFIGS,
+  DEFAULT_SPECTATOR_CONFIG,
+  DEFAULT_QUALITY_TIERS,
+  DEFAULT_MANAGER_CONFIG,
+} from './spectator.js';
+export type {
+  GameSpectatorConfig,
+  QualityTierConfig,
+  QualityTier,
+  SpectatorInfo,
+  SessionSpectatorState,
+  SpectatorEvents,
+  SpectatorManagerConfig,
+} from './spectator.js';
+
+// Chat System (Phase 5.1)
+export {
+  ChatManager,
+  ChatRateLimiter,
+  MessageHistory,
+  getChatManager,
+  resetChatManager,
+  QUICK_REACTIONS,
+  GAME_EMOTES,
+} from './chat.js';
+export type {
+  ChatMessage,
+  ChatReaction,
+  ChatRoom,
+  RoomSettings,
+  ChatParticipant,
+  RateLimitConfig as ChatRateLimitConfig,
+  ChatStats,
+  ModerationAction,
+  ChatEvent,
+  MessageType,
+  ChatProtocolMessage,
+  ChatJoinPayload,
+  ChatSendPayload,
+  ChatReactPayload,
+  ChatHistoryPayload,
+  ChatMutePayload,
+} from './chat.js';

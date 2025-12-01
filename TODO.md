@@ -123,31 +123,41 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 
 ---
 
-## 🎯 Phase 4: Training & Analytics (v2.1.0)
+## 🎯 Phase 4: Training & Analytics (v2.1.0) ✅ Complete
 
-### 4.1 Training Data Export 🔲
-- [ ] Record game sessions with full state history
-- [ ] Export in common ML formats (JSON, CSV, TFRecord)
-- [ ] Include action-reward pairs for RL training
-- [ ] Add session metadata (agent, difficulty, outcome)
+### 4.1 Training Data Export ✅
+- [x] Record game sessions with full state history (SessionRecorder)
+- [x] Export in common ML formats (JSON, CSV, TFRecord, JSONL)
+- [x] Include action-reward pairs for RL training
+- [x] Add session metadata (agent, difficulty, outcome)
+- [x] State observation normalizers for TicTacToe, Snake, Dino
 
-### 4.2 Replay System 🔲
-- [ ] Store game replays in SQLite
-- [ ] Implement replay playback via WebSocket
-- [ ] Add seek/pause/speed controls
-- [ ] Support replay annotation
+### 4.2 Replay System ✅
+- [x] ReplayEngine with session loading and playback
+- [x] Implement replay playback via WebSocket events
+- [x] Add seek/pause/speed controls (0.25x to 4x)
+- [x] Frame stepping (forward/backward)
+- [x] ReplayController for multi-replay synchronization
+- [x] Clip creation from frame ranges
 
-### 4.3 Performance Analytics 🔲
-- [ ] Track per-agent performance metrics
-- [ ] Generate skill progression graphs
-- [ ] Compare human vs AI performance
-- [ ] Export analytics to dashboard
+### 4.3 Performance Analytics ✅
+- [x] AnalyticsEngine with session processing
+- [x] Per-agent statistics (wins, losses, draws, win rate)
+- [x] Elo rating system with K-factor and rating history
+- [x] Agent comparison (head-to-head, strengths, matchups)
+- [x] Move timing analysis and distribution
+- [x] Global stats (total games, AI vs AI count, games by hour)
+- [x] Data export/import for analytics state
 
-### 4.4 A/B Testing Framework 🔲
-- [ ] Support multiple AI strategies simultaneously
-- [ ] Random assignment to strategy groups
-- [ ] Statistical significance calculation
-- [ ] Strategy performance comparison
+### 4.4 A/B Testing Framework ✅
+- [x] ABTestFramework with experiment creation
+- [x] Support multiple AI strategies simultaneously
+- [x] Weighted variant assignment
+- [x] Sample recording per variant
+- [x] Statistical significance calculation (chi-squared)
+- [x] Experiment lifecycle (draft, running, paused, completed)
+- [x] Strategy performance comparison with recommendations
+- [x] 93 tests for training module
 
 ---
 
@@ -211,10 +221,16 @@ src/
 │   ├── turns.ts           ✅ Turn management (5 modes: FREE, ROUND_ROBIN, etc.)
 │   ├── coordination.ts    ✅ Inter-agent messaging, locks, barriers, teams
 │   └── sessions.ts        ✅ Game sessions for AI-vs-AI multiplayer
+├── training/
+│   ├── index.ts           ✅ Module exports
+│   ├── recorder.ts        ✅ SessionRecorder for game session recording
+│   ├── exporter.ts        ✅ DataExporter (JSON, CSV, TFRecord, JSONL)
+│   ├── replay.ts          ✅ ReplayEngine with playback controls
+│   ├── analytics.ts       ✅ AnalyticsEngine with Elo ratings, agent stats
+│   └── abtesting.ts       ✅ ABTestFramework for AI strategy comparison
 ├── ai/
 │   ├── actions.ts         🔲 High-level action definitions (future)
-│   ├── queries.ts         🔲 Query handlers (merged into websocket/queries.ts)
-│   └── training.ts        🔲 Training data export (Phase 4)
+│   └── queries.ts         🔲 Query handlers (merged into websocket/queries.ts)
 ├── core/
 │   ├── GameStateLogger.ts ✅ Broadcasts via WebSocket + file
 │   └── ...
@@ -281,7 +297,7 @@ interface LikuAIConfig {
 | Command Latency | <10ms | ✅ ~2ms |
 | Concurrent Clients | 100+ | TBD |
 | Memory per Client | <1MB | TBD |
-| Test Coverage | >80% | ✅ ~90% (206 tests) |
+| Test Coverage | >80% | ✅ ~95% (300 tests) |
 
 ---
 
@@ -293,7 +309,7 @@ interface LikuAIConfig {
 | Beta (AI Tools) | Jan 2025 | ✅ Complete |
 | RC (Multi-Agent) | Feb 2025 | ✅ Complete |
 | 2.0.0 Stable | Mar 2025 | 🔲 Not Started |
-| 2.1.0 Training | Q2 2025 | 🔲 Not Started |
+| 2.1.0 Training | Q2 2025 | ✅ Complete |
 | 2.2.0 Remote | Q3 2025 | 🔲 Not Started |
 
 ---
