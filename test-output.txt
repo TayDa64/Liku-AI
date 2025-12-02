@@ -1,0 +1,9 @@
+═══════════════════════════════════════════════════════════════
+  Cross-Chat AI Game - BEST OF 5 SERIES
+  Simulating two chat windows finding each other
+  FAIR PLAY: Both agents use SMART strategy
+═══════════════════════════════════════════════════════════════
+
+Step 1: Both agents connect to server...
+
+[ChatWindow-1] Disconnected

@@ -8,7 +8,8 @@
     "liku": "dist/index.js",
     "liku-agent": "dist/agent/cli.js",
     "liku-autoplay": "dist/autoplayer/cli.js",
-    "liku-learn": "dist/learn/cli.js"
+    "liku-learn": "dist/learn/cli.js",
+    "liku-server": "dist/websocket/cli.js"
   },
   "scripts": {
     "build": "tsc",
@@ -16,6 +17,9 @@
     "dev": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run",
+    "server": "node dist/websocket/cli.js",
+    "server:verbose": "node dist/websocket/cli.js --verbose",
+    "ai-vs-ai": "node dist/websocket/cli.js & sleep 2 && node scripts/test-ai-vs-ai.js",
     "agent": "node dist/agent/cli.js",
     "agent:info": "node dist/agent/cli.js info",
     "agent:read": "node dist/agent/cli.js read",

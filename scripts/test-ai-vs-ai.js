@@ -19,6 +19,11 @@ class SimpleAI {
     this.sessionId = null;
     this.isMyTurn = false;
     this.gameOver = false;
+    this.board = [
+      [null, null, null],
+      [null, null, null],
+      [null, null, null]
+    ];
   }
 
   connect() {
@@ -91,7 +96,12 @@ class SimpleAI {
     
     switch (eventType) {
       case 'session:created':
-        console.log(`[${this.name}] Session created: ${event.sessionId?.slice(0, 8)}`);
+        // Session ID is in event.id (not event.sessionId)
+        const createdId = event.id || event.sessionId;
+        if (createdId) {
+          this.sessionId = createdId;
+        }
+        console.log(`[${this.name}] Session created: ${createdId?.slice(0, 12) || 'unknown'}`);
         break;
 
       case 'session:playerJoined':
@@ -117,10 +127,13 @@ class SimpleAI {
 
       case 'session:moveMade':
         console.log(`[${this.name}] Move made by ${event.agentId?.slice(0, 8) || 'player'} at (${event.move?.row ?? event.row},${event.move?.col ?? event.col})`);
-        if (event.board) {
-          this.printBoard(event.board);
-        } else if (event.state?.board) {
+        // Update local board state
+        if (event.state?.board) {
+          this.board = event.state.board;
           this.printBoard(event.state.board);
+        } else if (event.board) {
+          this.board = event.board;
+          this.printBoard(event.board);
         }
         break;
 
@@ -162,17 +175,48 @@ class SimpleAI {
   makeMove() {
     if (!this.isMyTurn || this.gameOver) return;
 
-    // Simple strategy: try center first, then corners, then edges
-    const moves = [
+    // Find empty cells from current board state
+    const emptyCells = [];
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) {
+        if (!this.board[row][col]) {
+          emptyCells.push([row, col]);
+        }
+      }
+    }
+
+    if (emptyCells.length === 0) {
+      console.log(`[${this.name}] No empty cells!`);
+      return;
+    }
+
+    // Simple strategy: prefer center, then corners, then edges
+    const priorities = [
       [1, 1], // center
       [0, 0], [0, 2], [2, 0], [2, 2], // corners
       [0, 1], [1, 0], [1, 2], [2, 1]  // edges
     ];
 
-    // For testing, just try moves in order
-    // The server will tell us if a move is invalid
-    const [row, col] = moves[Math.floor(Math.random() * moves.length)];
-    console.log(`[${this.name}] Attempting move at (${row}, ${col})`);
+    let move = null;
+    for (const [r, c] of priorities) {
+      if (emptyCells.some(([er, ec]) => er === r && ec === c)) {
+        move = [r, c];
+        break;
+      }
+    }
+
+    // Fallback to first empty cell
+    if (!move && emptyCells.length > 0) {
+      move = emptyCells[0];
+    }
+
+    if (!move) {
+      console.log(`[${this.name}] No valid move found!`);
+      return;
+    }
+
+    const [row, col] = move;
+    console.log(`[${this.name}] Making move at (${row}, ${col})`);
     
     this.send({
       type: 'action',

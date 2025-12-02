@@ -1,0 +1,8 @@
+Starting Liku-AI WebSocket server...
+[Security] No JWT secret provided - using random key (tokens will be invalid after restart)
+[WS] Liku-AI WebSocket server v1.0.0 listening on ws://localhost:3847
+[WS] Security: {"tls":{"enabled":false,"minVersion":"TLSv1.2","requestCert":false},"jwt":{"enabled":false,"algorithm":"HS256","issuer":"liku-ai","expiresIn":3600,"allowRefresh":true}}
+[WS] Health endpoint listening on port 3848
+Server is running on port 3847
+Health endpoint on port 3848
+Press Ctrl+C to stop
