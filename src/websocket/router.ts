@@ -6,6 +6,7 @@
  * - Input validation and sanitization
  * - Action-level and key-level command support
  * - Per-client command tracking
+ * - Matchmaking for cross-chat AI pairing
  * 
  * @module websocket/router
  */
@@ -21,6 +22,12 @@ import {
   PlayerSlot,
   SessionConfig,
 } from './sessions.js';
+import { 
+  MatchmakingManager, 
+  getMatchmakingManager,
+  getMatchInstructions,
+  MatchRequest,
+} from './matchmaking.js';
 
 /**
  * Rate limit configuration
@@ -69,6 +76,12 @@ export type GameAction =
   | 'game_forfeit'
   | 'game_ready'
   | 'game_spectate'
+  // Matchmaking actions (cross-chat AI pairing)
+  | 'host_game'
+  | 'join_match'
+  | 'cancel_match'
+  | 'list_matches'
+  | 'spectate_match'
   // Universal actions
   | 'start'
   | 'restart'
@@ -125,6 +138,12 @@ const ACTION_TO_KEYS: Record<GameAction, ValidKey[]> = {
   game_forfeit: [],
   game_ready: [],
   game_spectate: [],
+  // Matchmaking actions (no key mappings - handled separately)
+  host_game: [],
+  join_match: [],
+  cancel_match: [],
+  list_matches: [],
+  spectate_match: [],
   // Universal
   start: ['enter'],
   restart: ['enter'],
@@ -327,6 +346,11 @@ export class CommandRouter extends EventEmitter {
       return this.handleSessionAction(clientId, gameAction, command);
     }
 
+    // Handle matchmaking actions (cross-chat AI pairing)
+    if (this.isMatchmakingAction(gameAction)) {
+      return this.handleMatchmakingAction(clientId, gameAction, command);
+    }
+
     const keys = ACTION_TO_KEYS[gameAction];
 
     // Emit action event
@@ -355,6 +379,13 @@ export class CommandRouter extends EventEmitter {
    */
   private isSessionAction(action: GameAction): boolean {
     return action.startsWith('game_');
+  }
+
+  /**
+   * Check if action is a matchmaking action
+   */
+  private isMatchmakingAction(action: GameAction): boolean {
+    return ['host_game', 'join_match', 'cancel_match', 'list_matches'].includes(action);
   }
 
   /**
@@ -474,6 +505,7 @@ export class CommandRouter extends EventEmitter {
 
         const row = payload.row as number;
         const col = payload.col as number;
+        const reason = (payload.reason as string) || undefined; // AI's reasoning for the move
 
         if (typeof row !== 'number' || typeof col !== 'number') {
           return this.errorResponse('row and col are required for move', command.requestId);
@@ -485,6 +517,16 @@ export class CommandRouter extends EventEmitter {
           return this.errorResponse(result.error || 'Invalid move', command.requestId);
         }
 
+        // Emit move with reasoning for spectators and opponent
+        if (reason) {
+          this.emit('moveReasoning', {
+            sessionId,
+            agentId: clientId,
+            move: { row, col },
+            reason,
+          });
+        }
+
         return {
           type: 'ack',
           requestId: command.requestId,
@@ -493,6 +535,7 @@ export class CommandRouter extends EventEmitter {
             action: 'game_move',
             sessionId,
             move: { row, col },
+            reason, // Include reasoning in ack
             gameOver: result.gameOver,
             winner: result.winner,
             nextPlayer: result.nextPlayer,
@@ -565,6 +608,235 @@ export class CommandRouter extends EventEmitter {
 
       default:
         return this.errorResponse(`Unknown session action: ${action}`, command.requestId);
+    }
+  }
+
+  /**
+   * Handle matchmaking actions (cross-chat AI pairing)
+   */
+  private handleMatchmakingAction(clientId: string, action: GameAction, command: AICommand): AIResponse {
+    const payload = command.payload;
+    const matchmaker = getMatchmakingManager();
+
+    switch (action) {
+      case 'host_game': {
+        const gameType = (payload.gameType as string) || 'tictactoe';
+        const name = (payload.name as string) || `Agent_${clientId.slice(0, 8)}`;
+
+        try {
+          const match = matchmaker.hostGame(clientId, name, gameType);
+          const instructions = getMatchInstructions(match.matchCode, gameType);
+
+          return {
+            type: 'ack',
+            requestId: command.requestId,
+            data: {
+              action: 'host_game',
+              matchCode: match.matchCode,
+              gameType: match.gameType,
+              expiresIn: Math.round((match.expiresAt - Date.now()) / 1000),
+              status: 'waiting',
+              instructions,
+              message: `Share this code with your opponent: ${match.matchCode}`,
+            },
+            timestamp: Date.now(),
+          };
+        } catch (err) {
+          return this.errorResponse((err as Error).message, command.requestId);
+        }
+      }
+
+      case 'join_match': {
+        const matchCode = payload.matchCode as string;
+        const name = (payload.name as string) || `Agent_${clientId.slice(0, 8)}`;
+
+        if (!matchCode) {
+          return this.errorResponse('matchCode is required', command.requestId);
+        }
+
+        try {
+          const match = matchmaker.joinMatch(matchCode, clientId, name);
+
+          // FAIR PLAY: Randomly assign slots to prevent host advantage
+          // This ensures neither player has a systematic advantage
+          const randomSlot = Math.random() < 0.5;
+          const hostSlot: PlayerSlot = randomSlot ? 'X' : 'O';
+          const guestSlot: PlayerSlot = randomSlot ? 'O' : 'X';
+
+          // Create a game session for the matched players with random starting player
+          const sessionConfig: Partial<SessionConfig> = {
+            gameType: match.gameType as GameType,
+            mode: 'ai_vs_ai' as GameMode,
+            turnTimeMs: 30000,
+            allowSpectators: true,
+            startingPlayer: 'random',  // Fair: random who goes first
+            randomSlotAssignment: true,
+          };
+
+          const session = this.sessionManager.createSession(sessionConfig);
+          
+          // Get the actual starting player from the session state
+          const startingPlayer = (session.state as { currentPlayer: string }).currentPlayer;
+
+          // Join both players with randomly assigned slots
+          this.sessionManager.joinSession(session.id, match.hostAgentId, match.hostName, 'ai', hostSlot);
+          this.sessionManager.joinSession(session.id, clientId, name, 'ai', guestSlot);
+
+          // Associate session with match
+          matchmaker.setSessionId(match.matchCode, session.id);
+
+          // Emit match found event for both players with their actual slots
+          this.emit('matchFound', {
+            matchCode: match.matchCode,
+            sessionId: session.id,
+            host: { id: match.hostAgentId, name: match.hostName, slot: hostSlot },
+            guest: { id: clientId, name, slot: guestSlot },
+            gameType: match.gameType,
+            startingPlayer,
+          });
+
+          return {
+            type: 'ack',
+            requestId: command.requestId,
+            data: {
+              action: 'join_match',
+              matched: true,
+              matchCode: match.matchCode,
+              sessionId: session.id,
+              gameType: match.gameType,
+              opponent: {
+                name: match.hostName,
+              },
+              yourSlot: guestSlot,
+              startingPlayer,
+              goesFirst: guestSlot === startingPlayer,
+              message: `Matched! You are playing as ${guestSlot} against ${match.hostName}. ${guestSlot === startingPlayer ? 'You go first!' : `${match.hostName} (${hostSlot}) goes first.`}`,
+              nextSteps: [
+                'Call action: game_ready with sessionId to indicate you are ready',
+                'When both players are ready, the game will start',
+                'Make moves with action: game_move, sessionId, row, col',
+              ],
+            },
+            timestamp: Date.now(),
+          };
+        } catch (err) {
+          return this.errorResponse((err as Error).message, command.requestId);
+        }
+      }
+
+      case 'cancel_match': {
+        const matchCode = payload.matchCode as string;
+
+        if (!matchCode) {
+          return this.errorResponse('matchCode is required', command.requestId);
+        }
+
+        try {
+          matchmaker.cancelMatch(matchCode, clientId);
+
+          return {
+            type: 'ack',
+            requestId: command.requestId,
+            data: {
+              action: 'cancel_match',
+              matchCode,
+              cancelled: true,
+            },
+            timestamp: Date.now(),
+          };
+        } catch (err) {
+          return this.errorResponse((err as Error).message, command.requestId);
+        }
+      }
+
+      case 'list_matches': {
+        const waiting = matchmaker.listWaitingMatches();
+        const myMatches = matchmaker.getAgentMatches(clientId);
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            action: 'list_matches',
+            myPendingMatches: myMatches.map(m => ({
+              matchCode: m.matchCode,
+              gameType: m.gameType,
+              createdAt: m.createdAt,
+              expiresIn: Math.round((m.expiresAt - Date.now()) / 1000),
+            })),
+            availableMatches: waiting.filter(m => m.hostAgentId !== clientId).map(m => ({
+              matchCode: m.matchCode,
+              gameType: m.gameType,
+              hostName: m.hostName,
+              expiresIn: Math.round((m.expiresAt - Date.now()) / 1000),
+            })),
+            stats: matchmaker.getStats(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'spectate_match': {
+        const matchCode = payload.matchCode as string;
+        const name = (payload.name as string) || `Spectator_${clientId.slice(0, 8)}`;
+
+        if (!matchCode) {
+          return this.errorResponse('matchCode is required', command.requestId);
+        }
+
+        try {
+          // Get the match to find the session
+          const match = matchmaker.getMatch(matchCode);
+          if (!match) {
+            return this.errorResponse('Match not found or expired', command.requestId);
+          }
+
+          if (!match.sessionId) {
+            return this.errorResponse('Game has not started yet - wait for both players', command.requestId);
+          }
+
+          // Join as spectator
+          const result = this.sessionManager.joinSession(
+            match.sessionId,
+            clientId,
+            name,
+            'spectator'
+          );
+
+          if (!result.success) {
+            return this.errorResponse(result.error || 'Failed to spectate', command.requestId);
+          }
+
+          const session = this.sessionManager.getSession(match.sessionId);
+          const players: Record<string, string> = {};
+          if (session) {
+            for (const [slot, player] of session.players) {
+              players[slot] = player.name;
+            }
+          }
+
+          return {
+            type: 'ack',
+            requestId: command.requestId,
+            data: {
+              action: 'spectate_match',
+              matchCode,
+              sessionId: match.sessionId,
+              gameType: match.gameType,
+              players,
+              state: session?.state,
+              status: session?.status,
+              message: 'You are now spectating this match',
+            },
+            timestamp: Date.now(),
+          };
+        } catch (err) {
+          return this.errorResponse((err as Error).message, command.requestId);
+        }
+      }
+
+      default:
+        return this.errorResponse(`Unknown matchmaking action: ${action}`, command.requestId);
     }
   }
 

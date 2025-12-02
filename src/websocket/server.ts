@@ -207,6 +207,63 @@ export class LikuWebSocketServer extends EventEmitter {
     this.router.on('ban', (clientId: string, duration: number) => {
       console.warn(`[WS] Client banned: ${clientId} for ${duration}ms`);
     });
+
+    // Handle matchmaking events
+    this.router.on('matchFound', (matchData: { 
+      matchCode: string; 
+      sessionId: string; 
+      host: { id: string; name: string; slot?: string }; 
+      guest: { id: string; name: string; slot?: string };
+      gameType: string;
+      startingPlayer?: string;
+    }) => {
+      // Get actual slots (use passed values or fallback to X/O)
+      const hostSlot = matchData.host.slot || 'X';
+      const guestSlot = matchData.guest.slot || 'O';
+      const startingPlayer = matchData.startingPlayer || 'X';
+      
+      // Notify host that opponent was found
+      this.sendToAgent(matchData.host.id, {
+        type: 'event',
+        data: {
+          event: 'opponent_found',
+          matchCode: matchData.matchCode,
+          sessionId: matchData.sessionId,
+          gameType: matchData.gameType,
+          opponent: {
+            name: matchData.guest.name,
+          },
+          yourRole: 'host',
+          yourSlot: hostSlot,
+          startingPlayer,
+          goesFirst: hostSlot === startingPlayer,
+          message: `${matchData.guest.name} has joined! You are ${hostSlot}. ${hostSlot === startingPlayer ? 'You go first!' : `${matchData.guest.name} (${guestSlot}) goes first.`}`,
+        },
+        timestamp: Date.now(),
+      });
+
+      // Notify guest too (they already got ack, but this ensures they get event)
+      this.sendToAgent(matchData.guest.id, {
+        type: 'event',
+        data: {
+          event: 'opponent_found',
+          matchCode: matchData.matchCode,
+          sessionId: matchData.sessionId,
+          gameType: matchData.gameType,
+          opponent: {
+            name: matchData.host.name,
+          },
+          yourRole: 'guest',
+          yourSlot: guestSlot,
+          startingPlayer,
+          goesFirst: guestSlot === startingPlayer,
+          message: `Matched with ${matchData.host.name}! You are ${guestSlot}. ${guestSlot === startingPlayer ? 'You go first!' : `${matchData.host.name} (${hostSlot}) goes first.`}`,
+        },
+        timestamp: Date.now(),
+      });
+
+      this.emit('matchFound', matchData);
+    });
   }
 
   /**
@@ -277,6 +334,40 @@ export class LikuWebSocketServer extends EventEmitter {
     this.sessionManager.on('moveMade', (sessionId: string, data: unknown) => {
       this.broadcastEvent('session:moveMade', { sessionId, ...data as object });
       this.emit('sessionMoveMade', sessionId, data);
+    });
+
+    // Move reasoning - broadcast to all session participants
+    this.router.on('moveReasoning', (data: { 
+      sessionId: string; 
+      agentId: string; 
+      move: { row: number; col: number };
+      reason: string;
+    }) => {
+      // Get agent name for display
+      const session = this.sessionManager.getSession(data.sessionId);
+      let playerName = 'Unknown';
+      let playerSlot = '?';
+      if (session) {
+        for (const [slot, player] of session.players) {
+          if (player.agentId === data.agentId) {
+            playerName = player.name;
+            playerSlot = slot as string;
+            break;
+          }
+        }
+      }
+
+      // Broadcast reasoning to all participants
+      this.broadcastEvent('session:moveReasoning', {
+        sessionId: data.sessionId,
+        player: playerName,
+        slot: playerSlot,
+        move: data.move,
+        reason: data.reason,
+      });
+      
+      // Log to server console for visibility
+      console.log(`[REASON] ${playerName} (${playerSlot}): "${data.reason}" → (${data.move.row},${data.move.col})`);
     });
 
     // Game ended

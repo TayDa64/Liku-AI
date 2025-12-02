@@ -110,6 +110,10 @@ export interface SessionConfig {
   allowSpectators: boolean;
   /** Auto-start when all players ready */
   autoStart: boolean;
+  /** Starting player slot ('X', 'O', or 'random' for fair coin flip) */
+  startingPlayer?: 'X' | 'O' | 'random';
+  /** Randomly assign slots to players (true for fair play) */
+  randomSlotAssignment?: boolean;
   /** Custom metadata */
   metadata?: Record<string, unknown>;
 }
@@ -188,7 +192,7 @@ export class GameSessionManager extends EventEmitter {
       players: new Map(),
       spectators: new Set(),
       turnManager: new TurnManager(turnConfig),
-      state: this.createInitialState(fullConfig.gameType),
+      state: this.createInitialState(fullConfig.gameType, fullConfig.startingPlayer || 'random'),
       status: 'waiting',
       createdAt: Date.now(),
       moveHistory: [],
@@ -205,8 +209,15 @@ export class GameSessionManager extends EventEmitter {
 
   /**
    * Create initial game state based on game type
+   * @param gameType - The type of game
+   * @param startingPlayer - Who starts first ('X', 'O', or 'random')
    */
-  private createInitialState(gameType: GameType): GameSessionState {
+  private createInitialState(gameType: GameType, startingPlayer: 'X' | 'O' | 'random' = 'random'): GameSessionState {
+    // Determine starting player - use random coin flip for fairness if 'random'
+    const firstPlayer: TicTacToeSlot = startingPlayer === 'random' 
+      ? (Math.random() < 0.5 ? 'X' : 'O')
+      : startingPlayer;
+    
     switch (gameType) {
       case 'tictactoe':
         return {
@@ -215,7 +226,7 @@ export class GameSessionManager extends EventEmitter {
             [null, null, null],
             [null, null, null],
           ],
-          currentPlayer: 'X',
+          currentPlayer: firstPlayer,
           moveCount: 0,
           winner: null,
           winningLine: null,
@@ -408,8 +419,9 @@ export class GameSessionManager extends EventEmitter {
     session.status = 'playing';
     session.startedAt = Date.now();
 
-    // Set first player's turn (X goes first in TicTacToe)
-    const firstSlot = this.getFirstPlayerSlot(session.config.gameType);
+    // Get the first player from the session state (respects random starting player)
+    const state = session.state as TicTacToeSessionState;
+    const firstSlot = state.currentPlayer;
     const firstPlayer = session.players.get(firstSlot);
     if (firstPlayer) {
       // Trigger turn for first player
@@ -421,7 +433,8 @@ export class GameSessionManager extends EventEmitter {
   }
 
   /**
-   * Get the slot that goes first
+   * Get the slot that goes first (legacy method - kept for compatibility)
+   * Note: For fair play, use session.state.currentPlayer instead
    */
   private getFirstPlayerSlot(gameType: GameType): PlayerSlot {
     switch (gameType) {

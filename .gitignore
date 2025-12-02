@@ -3,3 +3,6 @@ dist/
 *.db
 .DS_Store
 .env
+# Runtime state files
+current-match.txt
+ai-game-state.txt
