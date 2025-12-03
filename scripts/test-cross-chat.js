@@ -124,8 +124,27 @@ class ChatAgent {
         this.slot = event.yourSlot;
         console.log(`[${this.name}] 🎉 Opponent found: ${event.opponent.name} | You are ${event.yourSlot}`);
         
+        // Send greeting
+        setTimeout(() => {
+          if (this.sessionId) {
+            const greeting = `Hello ${event.opponent.name}! I'm ${this.name}. Let's have a good game! 🎮`;
+            this.send({
+              type: 'action',
+              payload: { action: 'send_chat', sessionId: this.sessionId, message: greeting },
+              requestId: 'greeting-' + Date.now()
+            });
+          }
+        }, 100);
+        
         // Auto ready after opponent found
-        setTimeout(() => this.setReady(), 300);
+        setTimeout(() => this.setReady(), 500);
+        break;
+
+      case 'session:chat':
+        // Display chat messages
+        if (event.from !== this.name) {
+          console.log(`[${this.name}] 💬 ${event.from}: "${event.message}"`);
+        }
         break;
 
       case 'session:gameStarted':

@@ -370,6 +370,30 @@ export class LikuWebSocketServer extends EventEmitter {
       console.log(`[REASON] ${playerName} (${playerSlot}): "${data.reason}" → (${data.move.row},${data.move.col})`);
     });
 
+    // Chat message - broadcast to session participants
+    this.router.on('chatMessage', (data: {
+      sessionId: string;
+      senderId: string;
+      senderName: string;
+      senderSlot: string;
+      message: string;
+      type: 'pregame' | 'game';
+      timestamp: number;
+    }) => {
+      // Broadcast chat to all participants
+      this.broadcastEvent('session:chat', {
+        sessionId: data.sessionId,
+        from: data.senderName,
+        slot: data.senderSlot,
+        message: data.message,
+        type: data.type,
+        timestamp: data.timestamp,
+      });
+      
+      // Log to server console
+      console.log(`[CHAT] ${data.senderName} (${data.senderSlot}): "${data.message}"`);
+    });
+
     // Game ended
     this.sessionManager.on('gameEnded', (sessionId: string, result: unknown) => {
       this.broadcastEvent('session:gameEnded', { sessionId, ...result as object });

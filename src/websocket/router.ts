@@ -76,6 +76,7 @@ export type GameAction =
   | 'game_forfeit'
   | 'game_ready'
   | 'game_spectate'
+  | 'send_chat'  // Pre-game and in-game chat between players
   // Matchmaking actions (cross-chat AI pairing)
   | 'host_game'
   | 'join_match'
@@ -138,6 +139,7 @@ const ACTION_TO_KEYS: Record<GameAction, ValidKey[]> = {
   game_forfeit: [],
   game_ready: [],
   game_spectate: [],
+  send_chat: [],  // Chat action - no key mapping
   // Matchmaking actions (no key mappings - handled separately)
   host_game: [],
   join_match: [],
@@ -378,7 +380,7 @@ export class CommandRouter extends EventEmitter {
    * Check if action is a session action
    */
   private isSessionAction(action: GameAction): boolean {
-    return action.startsWith('game_');
+    return action.startsWith('game_') || action === 'send_chat';
   }
 
   /**
@@ -491,6 +493,66 @@ export class CommandRouter extends EventEmitter {
             sessionId,
             ready,
             status: session?.status,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'send_chat': {
+        const sessionId = payload.sessionId as string;
+        if (!sessionId) {
+          return this.errorResponse('sessionId is required', command.requestId);
+        }
+
+        const message = payload.message as string;
+        if (!message || typeof message !== 'string') {
+          return this.errorResponse('message is required', command.requestId);
+        }
+
+        // Limit message length
+        const truncatedMessage = message.slice(0, 500);
+        
+        // Get session to find player info
+        const session = this.sessionManager.getSession(sessionId);
+        if (!session) {
+          return this.errorResponse('Session not found', command.requestId);
+        }
+
+        // Find the player by agentId (players Map is keyed by slot, not agentId)
+        let player = null;
+        let playerSlot = '';
+        for (const [slot, p] of session.players) {
+          if (p.agentId === clientId) {
+            player = p;
+            playerSlot = slot as string;
+            break;
+          }
+        }
+        
+        if (!player) {
+          return this.errorResponse('You are not in this session', command.requestId);
+        }
+
+        // Emit the chat message for the opponent and spectators
+        this.emit('chatMessage', {
+          sessionId,
+          senderId: clientId,
+          senderName: player.name,
+          senderSlot: playerSlot,
+          message: truncatedMessage,
+          type: session.status === 'playing' ? 'game' : 'pregame',
+          timestamp: Date.now(),
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'send_chat',
+            sessionId,
+            message: truncatedMessage,
             timestamp: Date.now(),
           },
           timestamp: Date.now(),
