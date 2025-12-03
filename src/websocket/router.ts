@@ -77,6 +77,7 @@ export type GameAction =
   | 'game_ready'
   | 'game_spectate'
   | 'send_chat'  // Pre-game and in-game chat between players
+  | 'request_rematch' // Request to play again after game ends
   // Matchmaking actions (cross-chat AI pairing)
   | 'host_game'
   | 'join_match'
@@ -140,6 +141,7 @@ const ACTION_TO_KEYS: Record<GameAction, ValidKey[]> = {
   game_ready: [],
   game_spectate: [],
   send_chat: [],  // Chat action - no key mapping
+  request_rematch: [], // Rematch action - no key mapping
   // Matchmaking actions (no key mappings - handled separately)
   host_game: [],
   join_match: [],
@@ -195,9 +197,9 @@ export class CommandRouter extends EventEmitter {
   constructor(config?: Partial<RateLimitConfig>, sessionManager?: GameSessionManager) {
     super();
     this.config = {
-      maxCommandsPerSecond: config?.maxCommandsPerSecond ?? 20,
-      maxBurstCommands: config?.maxBurstCommands ?? 5,
-      cooldownMs: config?.cooldownMs ?? 50,
+      maxCommandsPerSecond: config?.maxCommandsPerSecond ?? 30,
+      maxBurstCommands: config?.maxBurstCommands ?? 10,
+      cooldownMs: config?.cooldownMs ?? 30,
       banDurationMs: config?.banDurationMs ?? 30000,
       maxBansBeforePermanent: config?.maxBansBeforePermanent ?? 3,
     };
@@ -380,7 +382,7 @@ export class CommandRouter extends EventEmitter {
    * Check if action is a session action
    */
   private isSessionAction(action: GameAction): boolean {
-    return action.startsWith('game_') || action === 'send_chat';
+    return action.startsWith('game_') || action === 'send_chat' || action === 'request_rematch';
   }
 
   /**
@@ -553,6 +555,80 @@ export class CommandRouter extends EventEmitter {
             action: 'send_chat',
             sessionId,
             message: truncatedMessage,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'request_rematch': {
+        const sessionId = payload.sessionId as string;
+        if (!sessionId) {
+          return this.errorResponse('sessionId is required', command.requestId);
+        }
+
+        // Get session
+        const session = this.sessionManager.getSession(sessionId);
+        if (!session) {
+          return this.errorResponse('Session not found', command.requestId);
+        }
+
+        // Find the player by agentId
+        let player = null;
+        let playerSlot = '';
+        for (const [slot, p] of session.players) {
+          if (p.agentId === clientId) {
+            player = p;
+            playerSlot = slot as string;
+            break;
+          }
+        }
+        
+        if (!player) {
+          return this.errorResponse('You are not in this session', command.requestId);
+        }
+
+        // Request the rematch (swap slots for fairness by default)
+        const swapSlots = payload.swapSlots !== false; // Default to true
+        const result = this.sessionManager.resetSessionForRematch(sessionId, swapSlots);
+        
+        if (!result.success) {
+          return this.errorResponse(result.error || 'Failed to reset session', command.requestId);
+        }
+
+        // Find the requester's new slot after reset
+        let newSlot = '';
+        const resetSession = result.session!;
+        for (const [slot, p] of resetSession.players) {
+          if (p.agentId === clientId) {
+            newSlot = slot as string;
+            break;
+          }
+        }
+
+        // Emit rematch event for both players
+        this.emit('sessionRematch', {
+          sessionId,
+          requestedBy: player.name,
+          swapSlots,
+          players: Array.from(resetSession.players.entries()).map(([slot, p]) => ({
+            slot,
+            name: p.name,
+            agentId: p.agentId,
+          })),
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'request_rematch',
+            sessionId,
+            yourSlot: newSlot,
+            swapSlots,
+            status: resetSession.status,
+            message: 'Rematch ready - both players need to ready up',
             timestamp: Date.now(),
           },
           timestamp: Date.now(),

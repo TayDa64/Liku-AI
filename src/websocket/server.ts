@@ -394,6 +394,26 @@ export class LikuWebSocketServer extends EventEmitter {
       console.log(`[CHAT] ${data.senderName} (${data.senderSlot}): "${data.message}"`);
     });
 
+    // Session rematch - broadcast to session participants
+    this.router.on('sessionRematch', (data: {
+      sessionId: string;
+      requestedBy: string;
+      swapSlots: boolean;
+      players: Array<{ slot: string; name: string; agentId: string }>;
+    }) => {
+      // Broadcast rematch event to all participants
+      this.broadcastEvent('session:rematch', {
+        sessionId: data.sessionId,
+        requestedBy: data.requestedBy,
+        swapSlots: data.swapSlots,
+        players: data.players.map(p => ({ slot: p.slot, name: p.name })),
+        message: 'New game ready! Both players need to ready up.',
+      });
+      
+      // Log to server console
+      console.log(`[REMATCH] Session ${data.sessionId} reset by ${data.requestedBy} (swapSlots: ${data.swapSlots})`);
+    });
+
     // Game ended
     this.sessionManager.on('gameEnded', (sessionId: string, result: unknown) => {
       this.broadcastEvent('session:gameEnded', { sessionId, ...result as object });

@@ -8,13 +8,13 @@
  *   node scripts/ai-player.js join [name]              # Auto-read code from current-match.txt
  * 
  * Options:
- *   --series N    Play N games in a row (default: 1)
+ *   --series N    Play N games in a row (default: 5)
  *   --verbose     Show detailed reasoning
  * 
  * Examples:
- *   node scripts/ai-player.js host Claude
- *   node scripts/ai-player.js join Gemini
- *   node scripts/ai-player.js host Claude --series 5
+ *   node scripts/ai-player.js host Claude              # Host best-of-5 series
+ *   node scripts/ai-player.js join Gemini              # Join best-of-5 series
+ *   node scripts/ai-player.js host Claude --series 3   # Host best-of-3 series
  */
 
 import WebSocket from 'ws';
@@ -33,7 +33,7 @@ const JSON_STATE_FILE = path.join(__dirname, '..', 'ai-game-state.json');
 
 const rawArgs = process.argv.slice(2);
 const flags = {
-  series: 1,
+  series: 5,  // Default to best-of-5 series
   verbose: false,
 };
 
@@ -183,17 +183,32 @@ function makeMove() {
     console.log(`\n💭 ${playerName} (${mySlot}): ${move.reason}`);
     console.log(`   → Playing at [${move.pos[0]}, ${move.pos[1]}]`);
     
+    // Send move reasoning as a chat message to share with opponent
+    // Slight delay before move to avoid rate limiting
     send({
       type: 'action',
       payload: {
-        action: 'game_move',
+        action: 'send_chat',
         sessionId,
-        row: move.pos[0],
-        col: move.pos[1],
-        reason: move.reason
+        message: `🎯 ${move.reason} → [${move.pos[0]},${move.pos[1]}]`
       },
-      requestId: 'move-' + Date.now()
+      requestId: 'chat-reason-' + Date.now()
     });
+    
+    // Send the actual move after a brief delay
+    setTimeout(() => {
+      send({
+        type: 'action',
+        payload: {
+          action: 'game_move',
+          sessionId,
+          row: move.pos[0],
+          col: move.pos[1],
+          reason: move.reason
+        },
+        requestId: 'move-' + Date.now()
+      });
+    }, 50);
   }
   writeStateFile();
 }
@@ -379,6 +394,13 @@ function handleAck(msg) {
     board = data.state.board;
     writeStateFile();
   }
+
+  if (data.action === 'request_rematch') {
+    // Host gets their new slot from the ack
+    mySlot = data.yourSlot;
+    console.log(`🔄 Rematch confirmed! Now playing as ${mySlot}`);
+    writeStateFile();
+  }
 }
 
 function handleEvent(event) {
@@ -408,7 +430,7 @@ function handleEvent(event) {
             payload: { action: 'send_chat', sessionId, message: greeting }, 
             requestId: 'greeting-' + Date.now() 
           });
-          console.log(`💬 You: "${greeting}"`);
+          console.log(`💬 ${playerName}: "${greeting}"`);
         }
       }, 100);
       
@@ -517,7 +539,7 @@ function handleEvent(event) {
           payload: { action: 'send_chat', sessionId, message: ggMessage }, 
           requestId: 'gg-' + Date.now() 
         });
-        console.log(`💬 You: "${ggMessage}"`);
+        console.log(`💬 ${playerName}: "${ggMessage}"`);
       }
       
       if (event.state?.board) {
@@ -550,24 +572,78 @@ function handleEvent(event) {
           process.exit(0);
         }, 2000);
       } else {
-        // Start next game
-        console.log(`⏳ Starting game ${gamesPlayed + 1}/${flags.series} in 3 seconds...`);
+        // Start next game using rematch (keep same session!)
+        console.log(`⏳ Starting game ${gamesPlayed + 1}/${flags.series} in 2 seconds...`);
         
-        // Reset state for next game
-        sessionId = null;
-        mySlot = null;
+        // Reset board state (session remains the same)
         board = [[null, null, null], [null, null, null], [null, null, null]];
+        pendingMove = false;
+        gameInProgress = false;
         
         setTimeout(() => {
-          if (action === 'host') {
-            console.log('📡 Hosting next game...');
-            send({ type: 'action', payload: { action: 'host_game', gameType: 'tictactoe', name: playerName }, requestId: 'host-' + Date.now() });
+          // Only the host requests the rematch, joiner just waits
+          if (action === 'host' && sessionId) {
+            console.log('🔄 Requesting rematch...');
+            send({ 
+              type: 'action', 
+              payload: { 
+                action: 'request_rematch', 
+                sessionId,
+                swapSlots: true // Swap slots each game for fairness
+              }, 
+              requestId: 'rematch-' + Date.now() 
+            });
           } else {
-            console.log(`🔍 Re-joining with code ${matchCode}...`);
-            send({ type: 'action', payload: { action: 'join_match', matchCode, name: playerName }, requestId: 'join-' + Date.now() });
+            console.log('⏳ Waiting for host to start next game...');
           }
-        }, 3000);
+        }, 2000);
       }
+      break;
+
+    case 'session:rematch':
+      // Handle rematch event (both players receive this)
+      console.log('');
+      console.log('🔄 ══════════════════════════════════════════════════════════');
+      console.log(`   REMATCH! Game ${gamesPlayed + 1}/${flags.series}`);
+      
+      // Find our new slot from the event
+      if (event.players) {
+        for (const p of event.players) {
+          if (p.name === playerName) {
+            mySlot = p.slot;
+            break;
+          }
+        }
+      }
+      
+      console.log(`   Now playing as: ${mySlot}`);
+      console.log('══════════════════════════════════════════════════════════ 🔄');
+      console.log('');
+      
+      // Reset state
+      board = [[null, null, null], [null, null, null], [null, null, null]];
+      pendingMove = false;
+      gameInProgress = false;
+      
+      // Send a message about the new game
+      setTimeout(() => {
+        if (sessionId) {
+          send({ 
+            type: 'action', 
+            payload: { action: 'send_chat', sessionId, message: `Ready for game ${gamesPlayed + 1}! Let's go! 🎮` }, 
+            requestId: 'rematch-chat-' + Date.now() 
+          });
+          console.log(`💬 ${playerName}: "Ready for game ${gamesPlayed + 1}! Let's go! 🎮"`);
+        }
+      }, 100);
+      
+      // Auto-ready for next game
+      setTimeout(() => {
+        if (sessionId) {
+          send({ type: 'action', payload: { action: 'game_ready', sessionId, ready: true }, requestId: 'ready-' + Date.now() });
+        }
+      }, 500);
+      writeStateFile();
       break;
   }
 }

@@ -856,6 +856,72 @@ export class GameSessionManager extends EventEmitter {
   }
 
   /**
+   * Reset a finished session for a rematch
+   * Keeps the same players connected, resets game state
+   * Optionally swaps player slots for fairness
+   */
+  resetSessionForRematch(sessionId: string, swapSlots: boolean = true): {
+    success: boolean;
+    error?: string;
+    session?: GameSession;
+  } {
+    const session = this.sessions.get(sessionId);
+    if (!session) {
+      return { success: false, error: 'Session not found' };
+    }
+
+    if (session.status !== 'finished') {
+      return { success: false, error: 'Session must be finished to rematch' };
+    }
+
+    if (session.players.size < 2) {
+      return { success: false, error: 'Need two players for rematch' };
+    }
+
+    // Swap slots if requested (for fairness - alternating who goes first)
+    if (swapSlots && session.config.gameType === 'tictactoe') {
+      const playerX = session.players.get('X');
+      const playerO = session.players.get('O');
+      
+      if (playerX && playerO) {
+        // Swap their slots
+        playerX.slot = 'O';
+        playerO.slot = 'X';
+        
+        session.players.clear();
+        session.players.set('X', playerO);
+        session.players.set('O', playerX);
+        
+        // Reset ready status
+        playerX.ready = false;
+        playerO.ready = false;
+      }
+    } else {
+      // Just reset ready status
+      for (const player of session.players.values()) {
+        player.ready = false;
+      }
+    }
+
+    // Reset game state
+    session.state = this.createInitialState(session.config.gameType, session.config.startingPlayer || 'random');
+    session.status = 'ready'; // Both players already present
+    session.moveHistory = [];
+    delete session.startedAt;
+    delete session.endedAt;
+
+    // Reset turn manager and re-add players
+    session.turnManager.reset();
+    for (const [slot, player] of session.players) {
+      session.turnManager.addAgent(player.agentId, AgentRole.PLAYER);
+    }
+
+    this.emit('sessionReset', session);
+
+    return { success: true, session };
+  }
+
+  /**
    * Clean up old sessions
    */
   cleanupOldSessions(maxAgeMs: number = 3600000): number {

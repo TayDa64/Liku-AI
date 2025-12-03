@@ -5,8 +5,8 @@
     "slot": "O"
   },
   "match": {
-    "code": "LIKU-EEYW",
-    "sessionId": "session_dba52478-6ce2-4d92-9d9f-23fa2c1f82ae",
+    "code": "LIKU-ZHEH",
+    "sessionId": "session_caa37f33-98f1-4821-b27e-2e3d0a8f745e",
     "opponent": "Gemini"
   },
   "game": {
@@ -32,12 +32,12 @@
     "currentTurn": null
   },
   "series": {
-    "total": 1,
-    "played": 1,
+    "total": 5,
+    "played": 5,
     "wins": 0,
     "losses": 0,
-    "draws": 1
+    "draws": 5
   },
   "status": "complete",
-  "timestamp": "2025-12-03T17:47:15.876Z"
+  "timestamp": "2025-12-03T19:11:12.477Z"
 }
