@@ -191,6 +191,74 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 
 ---
 
+## 🎯 Phase 6: Chess Engine (v2.3.0) ✅ Complete
+
+### 6.1 Core Chess Engine ✅
+- [x] Install chess.js for move generation and validation
+- [x] Create ChessEngine wrapper with state tracking
+- [x] Define comprehensive TypeScript types (Color, PieceType, Square, Move, ChessState)
+- [x] Implement position hashing for repetition detection
+- [x] Track captured pieces and game history
+
+### 6.2 Position Evaluation ✅
+- [x] Material evaluation with standard centipawn values
+- [x] Piece-square tables for opening, middlegame, and endgame
+- [x] Tapered evaluation (0-256 scale blending phases)
+- [x] Pawn structure evaluation (doubled, isolated, passed pawns)
+- [x] Mobility scoring for all piece types
+- [x] King safety with pawn shield and tropism
+- [x] Bishop pair bonus, rook on open file bonus
+
+### 6.3 Search Algorithm ✅
+- [x] Alpha-beta pruning with fail-soft
+- [x] Iterative deepening with configurable depth
+- [x] Quiescence search for tactical stability
+- [x] Transposition table with Zobrist hashing
+- [x] MVV-LVA move ordering
+- [x] Killer move heuristic (2 killers per ply)
+- [x] History heuristic for quiet move ordering
+- [x] Null move pruning with R=3 reduction
+- [x] Late move reductions (LMR)
+- [x] Principal variation search (PVS)
+- [x] Aspiration windows for faster cutoffs
+- [x] Check extensions
+
+### 6.4 AI Player Integration ✅
+- [x] ChessAI class orchestrating evaluation, search, opening book
+- [x] Gemini API integration for move explanation
+- [x] Difficulty presets (beginner/intermediate/advanced/grandmaster)
+- [x] Time-based search termination
+- [x] ChessAIMatch for AI vs AI battles
+
+### 6.5 Opening Book ✅
+- [x] 20+ named openings (Italian, Ruy Lopez, Sicilian variants, French, Caro-Kann, etc.)
+- [x] Weighted move selection for variety
+- [x] Opening name detection from move sequence
+
+### 6.6 WebSocket Integration ✅
+- [x] Chess actions in router (chess_move, chess_resign, chess_draw_offer, etc.)
+- [x] Session manager support for chess game type
+- [x] Chess events (chessMove, chessResign, chessDrawOffer, etc.)
+
+### 6.7 Terminal UI ✅
+- [x] Chess.tsx Ink component with Unicode board display
+- [x] Chalk-based single-string row rendering for alignment
+- [x] Move input with SAN notation (e4, Nf3, O-O)
+- [x] Cursor-based movement (arrow keys + Enter)
+- [x] AI difficulty selection (beginner to grandmaster)
+- [x] Game controls (undo, resign, draw, hint, flip)
+- [x] Evaluation display and captured pieces
+- [x] Visual highlights (cursor, selected, legal moves, last move)
+
+### 6.8 AI Battle Script ✅
+- [x] scripts/chess-ai-battle.js for AI vs AI matches
+- [x] Configurable difficulty for both sides
+- [x] Support Gemini vs Minimax
+- [x] PGN export for game analysis
+- [x] Match statistics and summary
+
+---
+
 ## 🐛 Known Issues & Technical Debt
 
 ### High Priority
@@ -200,14 +268,14 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 
 ### Medium Priority
 - [x] Add unit tests for WebSocket module
-- [ ] Document WebSocket protocol formally
+- [x] Document WebSocket protocol formally (`docs/WEBSOCKET_PROTOCOL.md`)
 - [x] Add connection health monitoring (heartbeat)
 - [x] Implement backpressure for slow clients (rate limiting)
 
 ### Low Priority
-- [ ] Consider Socket.io as alternative to raw ws
-- [ ] Add WebSocket compression (permessage-deflate)
-- [ ] Profile memory usage with many connections
+- [ ] Consider Socket.io as alternative to raw ws _(prototype compatibility layer without regressing existing `ws` API or breaking `LikuWebSocketClient`)_ → **SKIP** (see [LOW_PRIORITY_EVALUATION.md](docs/LOW_PRIORITY_EVALUATION.md))
+- [ ] Add WebSocket compression (permessage-deflate) _(negotiate `permessage-deflate` without increasing latency for low-bandwidth games)_ → **DEFER** (see [LOW_PRIORITY_EVALUATION.md](docs/LOW_PRIORITY_EVALUATION.md))
+- [x] Profile memory usage with many connections ✅ **COMPLETE** - Tested 100/500/1000 connections with EXCELLENT results (see [PERFORMANCE.md](docs/PERFORMANCE.md))
 - [x] Add metrics/tracing integration (Prometheus format)
 
 ---
@@ -220,7 +288,7 @@ src/
 │   ├── server.ts          ✅ WebSocket server with TLS, JWT, health endpoints
 │   ├── client.ts          ✅ AI agent client with heartbeat, exponential backoff
 │   ├── index.ts           ✅ Module exports
-│   ├── router.ts          ✅ Command routing with rate limiting
+│   ├── router.ts          ✅ Command routing with rate limiting + chess actions
 │   ├── state.ts           ✅ Unified state management, game-specific schemas
 │   ├── protocol.ts        ✅ Protocol constants, validation, error codes
 │   ├── queries.ts         ✅ Query handlers with caching
@@ -234,6 +302,14 @@ src/
 │   ├── chat.ts            ✅ ChatManager with moderation, reactions
 │   ├── security.ts        ✅ TLS/WSS config, JWT auth, token validation
 │   └── turn.ts            ✅ TURN/STUN NAT traversal, ICE signaling
+├── chess/
+│   ├── index.ts           ✅ Module exports
+│   ├── types.ts           ✅ TypeScript types (Color, PieceType, Square, Move, etc.)
+│   ├── ChessEngine.ts     ✅ chess.js wrapper with state tracking
+│   ├── ChessEvaluator.ts  ✅ Position evaluation (material, PST, pawn, mobility)
+│   ├── ChessSearch.ts     ✅ Alpha-beta search with all modern enhancements
+│   ├── ChessAI.ts         ✅ AI player with Gemini integration, difficulty levels
+│   └── ChessOpenings.ts   ✅ Opening book with 20+ named openings
 ├── training/
 │   ├── index.ts           ✅ Module exports
 │   ├── recorder.ts        ✅ SessionRecorder for game session recording
@@ -249,10 +325,13 @@ src/
 │   └── games/
 │       ├── Snake.tsx      ✅ Uses createSnakeState()
 │       ├── DinoRun.tsx    ✅ Uses createDinoState()
-│       └── TicTacToe.tsx  ✅ Uses createTicTacToeState() + WebSocket mode
+│       ├── TicTacToe.tsx  ✅ Uses createTicTacToeState() + WebSocket mode
+│       └── Chess.tsx      ✅ Full chess UI with AI opponent, board display
 ├── core/
 │   ├── GameStateLogger.ts ✅ Broadcasts via WebSocket + file
 │   └── ...
+scripts/
+├── chess-ai-battle.js     ✅ AI vs AI chess matches with configurable difficulty
 k8s/                       ✅ Kubernetes deployment manifests
 ├── namespace.yaml         ✅ liku-ai namespace
 ├── configmap.yaml         ✅ Application configuration
@@ -323,8 +402,8 @@ interface LikuAIConfig {
 |--------|--------|---------|
 | State Latency | <5ms | ✅ ~1ms |
 | Command Latency | <10ms | ✅ ~2ms |
-| Concurrent Clients | 100+ | TBD |
-| Memory per Client | <1MB | TBD |
+| Concurrent Clients | 100+ | ✅ 1000 (tested) |
+| Memory per Client | <1MB | ✅ ~10KB |
 | Test Coverage | >80% | ✅ ~95% (476 tests) |
 
 ---
@@ -339,7 +418,8 @@ interface LikuAIConfig {
 | 2.0.0 Stable | Mar 2025 | 🔲 Not Started |
 | 2.1.0 Training | Q2 2025 | ✅ Complete |
 | 2.2.0 Remote (5.1-5.3) | Q3 2025 | ✅ Complete |
+| 2.3.0 Chess Engine | Q3 2025 | ✅ Complete |
 
 ---
 
-*Last Updated: June 2025*
+*Last Updated: July 2025*

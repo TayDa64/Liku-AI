@@ -7,6 +7,7 @@ import TicTacToe from './games/TicTacToe.js';
 import DinoRun from './games/DinoRun.js';
 import Hangman from './games/Hangman.js';
 import Sudoku from './games/Sudoku.js';
+import Chess from './games/Chess.js';
 import SettingsMenu from './SettingsMenu.js';
 import BuilderUI from './BuilderUI.js';
 import CommunityGamesMenu from './CommunityGamesMenu.js';
@@ -124,6 +125,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		{ id: 'dinorun', name: '🦖 Dino Run (Energy -10, XP Rewards)' },
 		{ id: 'hangman', name: '📝 Hangman (Energy -5, XP Rewards)' },
 		{ id: 'sudoku', name: '🧩 Sudoku (Energy -5, XP Rewards)' },
+		{ id: 'chess', name: '♟️ Chess vs AI (Energy -5, XP Rewards)' },
 		{ id: 'back', name: '🔙 Back to Main Menu' }
 	];
 
@@ -220,6 +222,14 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 			}
 			clearBeforeTransition();
 			setActiveGame('sudoku');
+		} else if (id === 'chess') {
+			if (stats.energy < 5) {
+				setMessage("Liku is too tired to play! Let him rest first.");
+				setTimeout(() => setMessage(null), 3000);
+				return;
+			}
+			clearBeforeTransition();
+			setActiveGame('chess');
 		} else if (id === 'feed') {
 			if (stats.xp < 10) {
 				setMessage("Not enough XP to buy food! Play games to earn XP.");
@@ -319,6 +329,10 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 	if (activeGame === 'sudoku') {
 		const sudokuDifficulty = settings?.snakeDifficulty === 'ai' ? 'medium' : settings?.snakeDifficulty;
 		return <Sudoku onExit={() => handleGameExit('games_menu')} difficulty={sudokuDifficulty} />;
+	}
+
+	if (activeGame === 'chess') {
+		return <Chess onExit={() => handleGameExit('games_menu')} mode="ai" difficulty="intermediate" />;
 	}
 
 	if (activeGame === 'settings') {

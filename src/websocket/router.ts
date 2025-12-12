@@ -69,6 +69,17 @@ export type GameAction =
   // TicTacToe actions
   | 'place_mark'
   | 'select_cell'
+  // Chess actions
+  | 'chess_move'      // Make a chess move (e.g., e4, Nf3, O-O)
+  | 'chess_resign'    // Resign the game
+  | 'chess_draw_offer'// Offer a draw
+  | 'chess_draw_accept' // Accept a draw offer
+  | 'chess_draw_decline' // Decline a draw offer
+  | 'chess_undo_request' // Request to undo last move
+  | 'chess_undo_accept'  // Accept undo request
+  | 'chess_undo_decline' // Decline undo request
+  | 'chess_get_moves'    // Get legal moves for a piece/position
+  | 'chess_get_hint'     // Request AI hint for best move
   // Session actions (AI-vs-AI)
   | 'game_create'
   | 'game_join'
@@ -133,6 +144,17 @@ const ACTION_TO_KEYS: Record<GameAction, ValidKey[]> = {
   // TicTacToe
   place_mark: ['enter'],
   select_cell: ['enter'],
+  // Chess actions (no key mappings - handled separately)
+  chess_move: [],
+  chess_resign: [],
+  chess_draw_offer: [],
+  chess_draw_accept: [],
+  chess_draw_decline: [],
+  chess_undo_request: [],
+  chess_undo_accept: [],
+  chess_undo_decline: [],
+  chess_get_moves: [],
+  chess_get_hint: [],
   // Session actions (no key mappings - handled separately)
   game_create: [],
   game_join: [],
@@ -350,6 +372,11 @@ export class CommandRouter extends EventEmitter {
       return this.handleSessionAction(clientId, gameAction, command);
     }
 
+    // Handle chess actions (chess-specific commands)
+    if (this.isChessAction(gameAction)) {
+      return this.handleChessAction(clientId, gameAction, command);
+    }
+
     // Handle matchmaking actions (cross-chat AI pairing)
     if (this.isMatchmakingAction(gameAction)) {
       return this.handleMatchmakingAction(clientId, gameAction, command);
@@ -383,6 +410,13 @@ export class CommandRouter extends EventEmitter {
    */
   private isSessionAction(action: GameAction): boolean {
     return action.startsWith('game_') || action === 'send_chat' || action === 'request_rematch';
+  }
+
+  /**
+   * Check if action is a chess action
+   */
+  private isChessAction(action: GameAction): boolean {
+    return action.startsWith('chess_');
   }
 
   /**
@@ -746,6 +780,292 @@ export class CommandRouter extends EventEmitter {
 
       default:
         return this.errorResponse(`Unknown session action: ${action}`, command.requestId);
+    }
+  }
+
+  /**
+   * Handle chess-specific actions
+   */
+  private handleChessAction(clientId: string, action: GameAction, command: AICommand): AIResponse {
+    const payload = command.payload;
+    const sessionId = payload.sessionId as string;
+
+    if (!sessionId) {
+      return this.errorResponse('sessionId is required for chess actions', command.requestId);
+    }
+
+    const session = this.sessionManager.getSession(sessionId);
+    if (!session) {
+      return this.errorResponse('Session not found', command.requestId);
+    }
+
+    if (session.config.gameType !== 'chess') {
+      return this.errorResponse('Session is not a chess game', command.requestId);
+    }
+
+    // Find player by agentId
+    let playerSlot: string | null = null;
+    let player = null;
+    for (const [slot, p] of session.players) {
+      if (p.agentId === clientId) {
+        playerSlot = slot;
+        player = p;
+        break;
+      }
+    }
+
+    switch (action) {
+      case 'chess_move': {
+        const move = payload.move as string;
+        if (!move) {
+          return this.errorResponse('move is required (e.g., e4, Nf3, O-O)', command.requestId);
+        }
+
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        // Emit the move for the chess engine to validate and execute
+        this.emit('chessMove', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+          move,
+          reasoning: payload.reasoning as string | undefined,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_move',
+            sessionId,
+            move,
+            playerSlot,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_resign': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessResign', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_resign',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_draw_offer': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessDrawOffer', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_draw_offer',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_draw_accept': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessDrawAccept', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_draw_accept',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_draw_decline': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessDrawDecline', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_draw_decline',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_get_moves': {
+        const square = payload.square as string | undefined;
+
+        this.emit('chessGetMoves', {
+          sessionId,
+          agentId: clientId,
+          square, // Optional: get moves for specific piece
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_get_moves',
+            sessionId,
+            square,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_get_hint': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessGetHint', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_get_hint',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_undo_request': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessUndoRequest', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_undo_request',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_undo_accept': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessUndoAccept', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_undo_accept',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      case 'chess_undo_decline': {
+        if (!player) {
+          return this.errorResponse('You are not a player in this game', command.requestId);
+        }
+
+        this.emit('chessUndoDecline', {
+          sessionId,
+          agentId: clientId,
+          playerSlot,
+        });
+
+        return {
+          type: 'ack',
+          requestId: command.requestId,
+          data: {
+            executed: true,
+            action: 'chess_undo_decline',
+            sessionId,
+            timestamp: Date.now(),
+          },
+          timestamp: Date.now(),
+        };
+      }
+
+      default:
+        return this.errorResponse(`Unknown chess action: ${action}`, command.requestId);
     }
   }
 
