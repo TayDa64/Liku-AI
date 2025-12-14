@@ -107,7 +107,73 @@ export interface MenuState {
   recommendations: string[];
 }
 
-export type StructuredGameData = DinoGameState | SnakeGameState | TicTacToeGameState | MenuState;
+/**
+ * Structured Chess game state for AI agents
+ * Includes FEN notation for machine-readable board representation
+ */
+export interface ChessGameState {
+  type: 'chess';
+  isPlaying: boolean;
+  isGameOver: boolean;
+  
+  // FEN string - THE key field for AI to understand board position
+  fen: string;
+  
+  // Turn info
+  turn: 'w' | 'b';
+  moveNumber: number;
+  isPlayerTurn: boolean;
+  playerColor: 'w' | 'b';
+  
+  // Board as 8x8 array (for visual parsing)
+  // Piece notation: K Q R B N P (white), k q r b n p (black), null for empty
+  board: Array<Array<string | null>>;
+  
+  // Legal moves in UCI format (e.g., "e2e4", "g1f3")
+  legalMoves: string[];
+  
+  // Legal moves in SAN format (e.g., "e4", "Nf3") 
+  legalMovesSan: string[];
+  
+  // Game state flags
+  isCheck: boolean;
+  isCheckmate: boolean;
+  isStalemate: boolean;
+  isDraw: boolean;
+  drawReason?: string;
+  
+  // Last move info
+  lastMove: {
+    from: string;
+    to: string;
+    san: string;
+    piece: string;
+    captured?: string;
+  } | null;
+  
+  // Captured pieces
+  capturedPieces: {
+    white: string[];  // Pieces captured BY white (black pieces)
+    black: string[];  // Pieces captured BY black (white pieces)
+  };
+  
+  // Position evaluation (centipawns, positive = white advantage)
+  evaluation: number;
+  
+  // Move history in SAN notation
+  history: string[];
+  
+  // AI recommendations
+  recommendations: string[];
+  
+  // Difficulty level if playing vs AI
+  difficulty?: string;
+  
+  // Opening name if recognized
+  opening?: string;
+}
+
+export type StructuredGameData = DinoGameState | SnakeGameState | TicTacToeGameState | ChessGameState | MenuState;
 
 /**
  * Unified state container for all AI interfaces
@@ -612,5 +678,131 @@ export function createTicTacToeState(params: {
       winningLine,
     },
     recommendations,
+  };
+}
+
+/**
+ * Helper to create structured Chess game state
+ * Provides FEN notation and all data needed for AI to play
+ */
+export function createChessState(params: {
+  fen: string;
+  turn: 'w' | 'b';
+  moveNumber: number;
+  isPlayerTurn: boolean;
+  playerColor: 'w' | 'b';
+  legalMoves: Array<{ from: string; to: string; san: string }>;
+  isCheck: boolean;
+  isCheckmate: boolean;
+  isStalemate: boolean;
+  isDraw: boolean;
+  drawReason?: string;
+  lastMove?: { from: string; to: string; san: string; piece: string; captured?: string } | null;
+  capturedPieces: { white: string[]; black: string[] };
+  evaluation: number;
+  history: string[];
+  difficulty?: string;
+  opening?: string;
+}): ChessGameState {
+  const {
+    fen, turn, moveNumber, isPlayerTurn, playerColor,
+    legalMoves, isCheck, isCheckmate, isStalemate, isDraw, drawReason,
+    lastMove, capturedPieces, evaluation, history, difficulty, opening
+  } = params;
+
+  // Parse FEN to create board array
+  const fenParts = fen.split(' ');
+  const position = fenParts[0];
+  const board: Array<Array<string | null>> = [];
+  
+  for (const rank of position.split('/')) {
+    const row: Array<string | null> = [];
+    for (const char of rank) {
+      if (/\d/.test(char)) {
+        // Empty squares
+        for (let i = 0; i < parseInt(char, 10); i++) {
+          row.push(null);
+        }
+      } else {
+        row.push(char);
+      }
+    }
+    board.push(row);
+  }
+
+  // Extract legal moves in both formats
+  const legalMovesUci = legalMoves.map(m => `${m.from}${m.to}`);
+  const legalMovesSan = legalMoves.map(m => m.san);
+
+  // Build recommendations
+  const recommendations: string[] = [];
+  const isGameOver = isCheckmate || isStalemate || isDraw;
+  
+  if (isGameOver) {
+    if (isCheckmate) {
+      recommendations.push(`Checkmate! ${turn === 'w' ? 'Black' : 'White'} wins.`);
+    } else if (isStalemate) {
+      recommendations.push('Stalemate - game is a draw.');
+    } else if (isDraw) {
+      recommendations.push(`Draw: ${drawReason || 'by agreement'}`);
+    }
+  } else {
+    // Provide helpful info for AI
+    const turnStr = turn === 'w' ? 'White' : 'Black';
+    recommendations.push(`${turnStr} to move. ${legalMoves.length} legal moves available.`);
+    
+    if (isCheck) {
+      recommendations.push('KING IN CHECK - must escape!');
+    }
+    
+    // Opening suggestion
+    if (opening) {
+      recommendations.push(`Opening: ${opening}`);
+    }
+    
+    // Sample moves
+    if (legalMoves.length > 0) {
+      const sampleMoves = legalMovesSan.slice(0, 5).join(', ');
+      recommendations.push(`Example moves: ${sampleMoves}${legalMoves.length > 5 ? '...' : ''}`);
+    }
+    
+    // Evaluation context
+    if (Math.abs(evaluation) < 50) {
+      recommendations.push('Position is roughly equal.');
+    } else if (evaluation > 200) {
+      recommendations.push('White has a significant advantage.');
+    } else if (evaluation < -200) {
+      recommendations.push('Black has a significant advantage.');
+    }
+    
+    // AI instruction
+    recommendations.push(`To move: send action "chess_move" with params { move: "<SAN or UCI>" }`);
+    recommendations.push(`Example: { "action": "chess_move", "params": { "move": "e4" } }`);
+  }
+
+  return {
+    type: 'chess',
+    isPlaying: !isGameOver,
+    isGameOver,
+    fen,
+    turn,
+    moveNumber,
+    isPlayerTurn,
+    playerColor,
+    board,
+    legalMoves: legalMovesUci,
+    legalMovesSan,
+    isCheck,
+    isCheckmate,
+    isStalemate,
+    isDraw,
+    drawReason,
+    lastMove: lastMove || null,
+    capturedPieces,
+    evaluation,
+    history,
+    recommendations,
+    difficulty,
+    opening,
   };
 }

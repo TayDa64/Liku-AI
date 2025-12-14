@@ -31,6 +31,7 @@ export {
   createDinoState,
   createSnakeState,
   createTicTacToeState,
+  createChessState,
 } from './state.js';
 export type {
   UnifiedGameState,
@@ -38,6 +39,7 @@ export type {
   DinoGameState,
   SnakeGameState,
   TicTacToeGameState,
+  ChessGameState,
   MenuState,
 } from './state.js';
 

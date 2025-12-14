@@ -8,6 +8,7 @@
  * - Visual highlights: cursor, selected piece, legal moves, last move
  * - AI opponent with multiple difficulty levels
  * - Hint system, undo, flip board
+ * - AI-readable state logging with FEN notation
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -17,6 +18,8 @@ import chalk from 'chalk';
 import { ChessEngine } from '../../chess/ChessEngine.js';
 import { ChessAI } from '../../chess/ChessAI.js';
 import { ChessEvaluator } from '../../chess/ChessEvaluator.js';
+import { logGameState } from '../../core/GameStateLogger.js';
+import { createChessState } from '../../websocket/state.js';
 import {
   AIDifficulty,
   ChessState,
@@ -451,6 +454,82 @@ const Chess: React.FC<ChessProps> = ({
       return () => clearTimeout(t);
     }
   }, [mode, engine, playerColor, thinking, makeAIMove, gameState]);
+
+  // ==========================================================================
+  // AI State Logging - Log game state for external AI agents (Gemini CLI etc.)
+  // ==========================================================================
+  useEffect(() => {
+    // Get all legal moves with verbose info
+    const moves = engine.getMoves({ verbose: true }) as Move[];
+    const legalMoves = moves.map(m => ({
+      from: m.from,
+      to: m.to,
+      san: m.san,
+    }));
+
+    // Determine if it's the player's turn
+    const isPlayerTurn = engine.turn() === playerColor;
+
+    // Build visual ASCII board for humans
+    const fen = gameState.fen;
+    const board = parseFen(fen);
+    let visualBoard = '    a   b   c   d   e   f   g   h\n';
+    visualBoard += '  +---+---+---+---+---+---+---+---+\n';
+    for (let row = 0; row < 8; row++) {
+      const rank = 8 - row;
+      let rowStr = `${rank} |`;
+      for (let col = 0; col < 8; col++) {
+        const piece = board[row][col];
+        rowStr += ` ${piece || '.'} |`;
+      }
+      visualBoard += rowStr + ` ${rank}\n`;
+      visualBoard += '  +---+---+---+---+---+---+---+---+\n';
+    }
+    visualBoard += '    a   b   c   d   e   f   g   h\n';
+
+    // Status line
+    const turnStr = gameState.turn === 'w' ? 'White' : 'Black';
+    let status = `${turnStr} to move (Move #${gameState.moveNumber})`;
+    if (gameState.isCheckmate) status = `CHECKMATE! ${turnStr} loses.`;
+    else if (gameState.isStalemate) status = 'STALEMATE - Draw';
+    else if (gameState.isDraw) status = `DRAW: ${gameState.drawReason}`;
+    else if (gameState.isCheck) status += ' - CHECK!';
+    if (thinking) status += ' (AI thinking...)';
+
+    // Controls info
+    const controls = 'Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit';
+
+    // Create structured state for AI consumption
+    const structuredState = createChessState({
+      fen: gameState.fen,
+      turn: gameState.turn,
+      moveNumber: gameState.moveNumber,
+      isPlayerTurn,
+      playerColor,
+      legalMoves,
+      isCheck: gameState.isCheck,
+      isCheckmate: gameState.isCheckmate,
+      isStalemate: gameState.isStalemate,
+      isDraw: gameState.isDraw,
+      drawReason: gameState.drawReason,
+      lastMove: gameState.lastMove ? {
+        from: gameState.lastMove.from,
+        to: gameState.lastMove.to,
+        san: gameState.lastMove.san,
+        piece: gameState.lastMove.piece,
+        captured: gameState.lastMove.captured,
+      } : null,
+      capturedPieces: gameState.capturedPieces,
+      evaluation,
+      history: gameState.history,
+      difficulty,
+      opening: gameState.lastMove?.san ? undefined : 'Starting position',
+    });
+
+    // Log to file and broadcast via WebSocket
+    logGameState('Playing Chess', status, visualBoard, controls, structuredState);
+  }, [gameState, evaluation, thinking, engine, playerColor, difficulty]);
+  // ==========================================================================
 
   // Cursor selection
   const handleCursorAction = useCallback(() => {
