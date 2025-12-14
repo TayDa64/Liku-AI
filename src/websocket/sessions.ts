@@ -159,6 +159,7 @@ export const DEFAULT_SESSION_CONFIG: SessionConfig = {
   turnTimeMs: 30000,
   allowSpectators: true,
   autoStart: true,
+  startingPlayer: 'X', // Traditional TicTacToe: X always goes first
 };
 
 /**

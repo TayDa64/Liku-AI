@@ -268,12 +268,94 @@ const CENTER_SQUARES: Square[] = ['d4', 'd5', 'e4', 'e5'];
 const EXTENDED_CENTER: Square[] = ['c3', 'c4', 'c5', 'c6', 'd3', 'd4', 'd5', 'd6', 'e3', 'e4', 'e5', 'e6', 'f3', 'f4', 'f5', 'f6'];
 
 // =============================================================================
+// Pawn Hash Table
+// =============================================================================
+
+/**
+ * Pawn hash table entry
+ */
+interface PawnHashEntry {
+  score: number;
+}
+
+/**
+ * Pawn hash table for caching pawn structure evaluation
+ * Since pawn structure only depends on pawn positions, we can cache it
+ */
+class PawnHashTable {
+  private table: Map<string, PawnHashEntry> = new Map();
+  private maxSize: number;
+  private hits: number = 0;
+  private misses: number = 0;
+
+  constructor(maxSize: number = 50000) {
+    this.maxSize = maxSize;
+  }
+
+  /**
+   * Extract pawn-only key from FEN
+   * Only considers pawn positions, ignoring other pieces
+   */
+  getPawnKey(board: ReturnType<Chess['board']>): string {
+    let key = '';
+    for (let rank = 0; rank < 8; rank++) {
+      for (let file = 0; file < 8; file++) {
+        const piece = board[rank][file];
+        if (piece && piece.type === 'p') {
+          key += piece.color + rank + file;
+        }
+      }
+    }
+    return key;
+  }
+
+  probe(key: string): PawnHashEntry | null {
+    const entry = this.table.get(key);
+    if (entry) {
+      this.hits++;
+      return entry;
+    }
+    this.misses++;
+    return null;
+  }
+
+  store(key: string, score: number): void {
+    // Evict if table is full
+    if (this.table.size >= this.maxSize) {
+      // Simple eviction: delete first 25% of entries
+      const keysToDelete = Array.from(this.table.keys()).slice(0, Math.floor(this.maxSize / 4));
+      for (const k of keysToDelete) {
+        this.table.delete(k);
+      }
+    }
+    this.table.set(key, { score });
+  }
+
+  clear(): void {
+    this.table.clear();
+    this.hits = 0;
+    this.misses = 0;
+  }
+
+  getStats(): { hits: number; misses: number; size: number; hitRate: number } {
+    const total = this.hits + this.misses;
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      size: this.table.size,
+      hitRate: total > 0 ? this.hits / total : 0,
+    };
+  }
+}
+
+// =============================================================================
 // ChessEvaluator Class
 // =============================================================================
 
 export class ChessEvaluator {
   private config: EvaluatorConfig;
   private chess: Chess;
+  private pawnHash: PawnHashTable;
 
   constructor(config: EvaluatorConfig = {}) {
     this.config = {
@@ -285,6 +367,7 @@ export class ChessEvaluator {
       ...config,
     };
     this.chess = new Chess();
+    this.pawnHash = new PawnHashTable();
   }
 
   /**
@@ -294,16 +377,27 @@ export class ChessEvaluator {
    */
   evaluate(fen: string): number {
     this.chess.load(fen);
-    
-    // Quick terminal node check
-    if (this.chess.isCheckmate()) {
-      return this.chess.turn() === 'w' ? -30000 : 30000;
-    }
-    if (this.chess.isDraw()) {
-      return 0;
-    }
+    return this.evaluateInternal();
+  }
 
-    const breakdown = this.getEvaluationBreakdown(fen);
+  /**
+   * Evaluate directly from a Chess instance (avoids FEN parsing overhead)
+   * @param chess - Chess.js instance with position already loaded
+   * @returns Evaluation in centipawns (positive = white advantage)
+   */
+  evaluateFromChess(chess: Chess): number {
+    // Load the position from the external chess instance into our internal one
+    // This prevents us from modifying the caller's chess instance
+    this.chess.load(chess.fen());
+    return this.evaluateInternal();
+  }
+
+  /**
+   * Internal evaluation logic
+   * Note: Does NOT check for checkmate/draw as the search handles these
+   */
+  private evaluateInternal(): number {
+    const breakdown = this.getEvaluationBreakdownInternal();
     return breakdown.total;
   }
 
@@ -313,6 +407,13 @@ export class ChessEvaluator {
    */
   getEvaluationBreakdown(fen: string): EvaluationBreakdown {
     this.chess.load(fen);
+    return this.getEvaluationBreakdownInternal();
+  }
+
+  /**
+   * Internal evaluation breakdown (assumes chess position is already loaded)
+   */
+  private getEvaluationBreakdownInternal(): EvaluationBreakdown {
     const board = this.chess.board();
     
     // Calculate game phase
@@ -451,9 +552,17 @@ export class ChessEvaluator {
   }
 
   /**
-   * Evaluate pawn structure
+   * Evaluate pawn structure (with hash table caching)
    */
   private evaluatePawnStructure(board: ReturnType<Chess['board']>): number {
+    // Check pawn hash table first
+    const pawnKey = this.pawnHash.getPawnKey(board);
+    const cached = this.pawnHash.probe(pawnKey);
+    if (cached) {
+      return cached.score;
+    }
+    
+    // Calculate pawn structure
     const whitePawns = this.getPawnsByFile(board, 'w');
     const blackPawns = this.getPawnsByFile(board, 'b');
     
@@ -464,6 +573,9 @@ export class ChessEvaluator {
     
     // Evaluate black pawns
     score -= this.evaluatePawnStructureForColor(blackPawns, whitePawns, 'b');
+    
+    // Store in pawn hash table
+    this.pawnHash.store(pawnKey, score);
     
     return score;
   }
@@ -795,6 +907,20 @@ export class ChessEvaluator {
     }
     
     return { doubled, isolated, passed, backward, connected, islands };
+  }
+
+  /**
+   * Clear the pawn hash table
+   */
+  clearPawnHash(): void {
+    this.pawnHash.clear();
+  }
+
+  /**
+   * Get pawn hash table statistics
+   */
+  getPawnHashStats(): { hits: number; misses: number; size: number; hitRate: number } {
+    return this.pawnHash.getStats();
   }
 }
 

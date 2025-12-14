@@ -5,7 +5,7 @@
  * - Alpha-beta pruning with fail-soft
  * - Iterative deepening with aspiration windows
  * - Quiescence search to avoid horizon effect
- * - Transposition table with Zobrist hashing
+ * - Transposition table with proper Zobrist hashing (64-bit BigInt keys)
  * - Move ordering (hash move, MVV-LVA, killers, history)
  * - Null move pruning
  * - Late move reductions (LMR)
@@ -16,6 +16,7 @@
 
 import { Chess, Move as ChessJsMove } from 'chess.js';
 import { ChessEvaluator } from './ChessEvaluator.js';
+import { computeZobristHash } from './ChessZobrist.js';
 import {
   Color,
   DEFAULT_SEARCH_CONFIG,
@@ -47,40 +48,148 @@ const LVA_VALUES: Record<PieceType, number> = {
 };
 
 // =============================================================================
-// Zobrist Hashing
+// Transposition Table (Bucket-Based)
 // =============================================================================
 
-/** Generate random 64-bit-like number (using two 32-bit numbers) */
-function randomHash(): string {
-  return Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
-}
+/**
+ * Bucket-based Transposition Table
+ * Uses 4 entries per bucket for better cache performance and replacement
+ */
+class TranspositionTable {
+  private buckets: (TTEntry | null)[][];
+  private numBuckets: number;
+  private currentAge: number = 0;
+  private entries: number = 0;
 
-// Pre-generate Zobrist keys
-const ZOBRIST: {
-  pieces: Record<string, Record<string, string>>; // [square][piece] -> hash
-  turn: string;
-  castling: Record<string, string>;
-  enPassant: Record<string, string>;
-} = {
-  pieces: {},
-  turn: randomHash(),
-  castling: { K: randomHash(), Q: randomHash(), k: randomHash(), q: randomHash() },
-  enPassant: {},
-};
-
-// Initialize piece keys
-const files = 'abcdefgh';
-const ranks = '12345678';
-const pieces = ['P', 'N', 'B', 'R', 'Q', 'K', 'p', 'n', 'b', 'r', 'q', 'k'];
-
-for (const f of files) {
-  for (const r of ranks) {
-    const sq = f + r;
-    ZOBRIST.pieces[sq] = {};
-    for (const p of pieces) {
-      ZOBRIST.pieces[sq][p] = randomHash();
+  constructor(sizeMB: number) {
+    // Estimate ~48 bytes per entry (BigInt + numbers + string)
+    // 4 entries per bucket
+    const totalEntries = Math.floor((sizeMB * 1024 * 1024) / 48);
+    this.numBuckets = Math.floor(totalEntries / 4);
+    
+    // Initialize buckets
+    this.buckets = new Array(this.numBuckets);
+    for (let i = 0; i < this.numBuckets; i++) {
+      this.buckets[i] = [null, null, null, null];
     }
-    ZOBRIST.enPassant[sq] = randomHash();
+  }
+
+  /**
+   * Store an entry in the table
+   */
+  store(hash: bigint, depth: number, score: number, type: TTEntryType, bestMove: string): void {
+    const idx = Number(hash % BigInt(this.numBuckets));
+    const bucket = this.buckets[idx];
+    
+    // Find best slot to use:
+    // 1. Same hash (update existing)
+    // 2. Empty slot
+    // 3. Lowest depth entry
+    // 4. Oldest entry
+    let replaceIdx = 0;
+    let lowestPriority = Infinity;
+    
+    for (let i = 0; i < 4; i++) {
+      const entry = bucket[i];
+      
+      // Empty slot - use it
+      if (!entry) {
+        replaceIdx = i;
+        break;
+      }
+      
+      // Same position - always replace
+      if (entry.hash === hash) {
+        // Only replace if new entry is deeper or same depth
+        if (depth >= entry.depth) {
+          replaceIdx = i;
+          break;
+        }
+        return; // Don't replace deeper entry with shallower
+      }
+      
+      // Calculate replacement priority (lower = more likely to replace)
+      // Prioritize replacing: old entries, shallow entries, non-exact bounds
+      const agePenalty = (this.currentAge - entry.age) * 8;
+      const depthValue = entry.depth * 2;
+      const typeBonus = entry.type === 'EXACT' ? 4 : 0;
+      const priority = depthValue + typeBonus - agePenalty;
+      
+      if (priority < lowestPriority) {
+        lowestPriority = priority;
+        replaceIdx = i;
+      }
+    }
+    
+    // Store the entry
+    const wasEmpty = bucket[replaceIdx] === null;
+    bucket[replaceIdx] = {
+      hash,
+      depth,
+      score,
+      type,
+      bestMove,
+      age: this.currentAge,
+    };
+    
+    if (wasEmpty) {
+      this.entries++;
+    }
+  }
+
+  /**
+   * Probe the table for an entry
+   */
+  probe(hash: bigint): TTEntry | null {
+    const idx = Number(hash % BigInt(this.numBuckets));
+    const bucket = this.buckets[idx];
+    
+    for (const entry of bucket) {
+      if (entry && entry.hash === hash) {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Start a new search (increment age for replacement strategy)
+   */
+  newSearch(): void {
+    this.currentAge++;
+  }
+
+  /**
+   * Clear the table
+   */
+  clear(): void {
+    for (let i = 0; i < this.numBuckets; i++) {
+      this.buckets[i] = [null, null, null, null];
+    }
+    this.entries = 0;
+    this.currentAge = 0;
+  }
+
+  /**
+   * Get table fill percentage (per mille)
+   */
+  getHashFull(): number {
+    const maxEntries = this.numBuckets * 4;
+    return Math.round((this.entries / maxEntries) * 1000);
+  }
+
+  /**
+   * Get number of entries
+   */
+  getSize(): number {
+    return this.entries;
+  }
+
+  /**
+   * Get current age
+   */
+  getAge(): number {
+    return this.currentAge;
   }
 }
 
@@ -93,9 +202,8 @@ export class ChessSearch {
   private evaluator: ChessEvaluator;
   private chess: Chess;
   
-  // Transposition table
-  private tt: Map<string, TTEntry> = new Map();
-  private ttAge: number = 0;
+  // Transposition table (bucket-based with proper Zobrist hashing)
+  private tt: TranspositionTable;
   
   // Killer moves (2 per ply)
   private killers: string[][] = [];
@@ -119,6 +227,9 @@ export class ChessSearch {
     this.config = { ...DEFAULT_SEARCH_CONFIG, ...config };
     this.evaluator = evaluator || new ChessEvaluator();
     this.chess = new Chess();
+    
+    // Initialize bucket-based TT with proper Zobrist hashing
+    this.tt = new TranspositionTable(this.config.ttSizeMB);
     
     // Initialize killer move array
     for (let i = 0; i < 64; i++) {
@@ -144,7 +255,7 @@ export class ChessSearch {
     this.stopSearch = false;
     this.searchStartTime = Date.now();
     this.timeLimit = maxTime ?? this.config.maxTime;
-    this.ttAge++;
+    this.tt.newSearch(); // Increment TT age for replacement strategy
     
     const depth = maxDepth ?? this.config.maxDepth;
     
@@ -222,7 +333,7 @@ export class ChessSearch {
       time: elapsed,
       pv,
       aborted: this.stopSearch,
-      hashFull: Math.round((this.tt.size / (this.config.ttSizeMB * 1024)) * 1000),
+      hashFull: this.tt.getHashFull(),
       nps: elapsed > 0 ? Math.round((this.stats.nodes / elapsed) * 1000) : 0,
     };
   }
@@ -245,8 +356,9 @@ export class ChessSearch {
     
     this.pvLength[ply] = 0;
     
-    // Check for draw
-    if (this.chess.isDraw()) {
+    // Check for draw by repetition or 50-move rule
+    // Note: isDraw() is expensive, so we check less frequently at deeper plies
+    if (ply > 0 && this.chess.isDraw()) {
       return 0;
     }
     
@@ -255,7 +367,7 @@ export class ChessSearch {
       if (this.config.useQuiescence) {
         return this.quiescence(alpha, beta, ply);
       }
-      return this.evaluator.evaluate(this.chess.fen());
+      return this.evaluator.evaluateFromChess(this.chess);
     }
     
     this.stats.nodes++;
@@ -267,9 +379,9 @@ export class ChessSearch {
       depth++;
     }
     
-    // Probe transposition table
-    const hash = this.computeHash();
-    const ttEntry = this.tt.get(hash);
+    // Probe transposition table with proper Zobrist hash
+    const hash = computeZobristHash(this.chess.fen());
+    const ttEntry = this.tt.probe(hash);
     let ttMove: string | null = null;
     
     if (ttEntry && ttEntry.depth >= depth) {
@@ -299,23 +411,49 @@ export class ChessSearch {
       const parts = fen.split(' ');
       parts[1] = parts[1] === 'w' ? 'b' : 'w';
       parts[3] = '-'; // Clear en passant
+      const nullFen = parts.join(' ');
       
       try {
-        this.chess.load(parts.join(' '));
+        this.chess.load(nullFen);
         const R = depth > 6 ? 3 : 2;
         const nullScore = -this.alphaBeta(depth - R - 1, -beta, -beta + 1, false, ply + 1);
-        this.chess.load(fen);
+        this.chess.load(fen); // Restore original position
+        
+        if (this.stopSearch) return 0;
         
         if (nullScore >= beta) {
           this.stats.nullMoveCutoffs++;
           return beta;
         }
-      } catch {
-        this.chess.load(fen);
+      } catch (e) {
+        this.chess.load(fen); // Restore on error
+        throw e;
+      }
+    }
+    
+    // Futility pruning - skip moves unlikely to raise alpha
+    // Only at shallow depths (<= 3), not in PV, not in check, not near mate
+    let futilityPruning = false;
+    let staticEval = 0;
+    const FUTILITY_MARGINS = [0, 200, 300, 500]; // centipawns by depth
+    
+    if (this.config.useFutilityPruning && 
+        !isPV && 
+        !inCheck && 
+        depth <= 3 && 
+        Math.abs(alpha) < MATE_THRESHOLD &&
+        Math.abs(beta) < MATE_THRESHOLD) {
+      staticEval = this.evaluator.evaluateFromChess(this.chess);
+      const futilityMargin = FUTILITY_MARGINS[depth];
+      
+      // If even a large improvement can't raise alpha, enable futility pruning
+      if (staticEval + futilityMargin <= alpha) {
+        futilityPruning = true;
       }
     }
     
     // Generate and order moves
+    const currentFen = this.chess.fen();
     const moves = this.orderMoves(this.chess.moves({ verbose: true }) as ChessJsMove[], ply, ttMove);
     
     if (moves.length === 0) {
@@ -332,31 +470,55 @@ export class ChessSearch {
     const origAlpha = alpha;
     
     for (const move of moves) {
-      this.chess.move(move);
-      let score: number;
+      // Ensure position is correct before making move
+      if (this.chess.fen() !== currentFen) {
+        this.chess.load(currentFen);
+      }
       
-      // PVS: Search first move with full window, others with null window
-      if (movesSearched === 0) {
-        score = -this.alphaBeta(depth - 1, -beta, -alpha, isPV, ply + 1);
-      } else {
-        // Late Move Reductions
-        let reduction = 0;
-        if (this.config.useLMR && depth >= 3 && movesSearched >= 3 && !inCheck && !move.captured) {
-          reduction = Math.floor(Math.sqrt(depth - 1) + Math.sqrt(movesSearched - 1));
-          if (isPV) reduction = Math.max(0, reduction - 1);
-          this.stats.lmrReductions++;
-        }
+      // Futility pruning: skip quiet moves that can't improve alpha
+      // Don't prune first move, captures, promotions, or moves giving check
+      if (futilityPruning && 
+          movesSearched > 0 && 
+          !move.captured && 
+          !move.promotion) {
+        // Quick check if move gives check (make/unmake)
+        this.chess.move(move.san);
+        const givesCheck = this.chess.isCheck();
+        this.chess.undo();
         
-        // Null window search
-        score = -this.alphaBeta(depth - 1 - reduction, -alpha - 1, -alpha, false, ply + 1);
-        
-        // Re-search if failed high
-        if (score > alpha && (isPV || reduction > 0)) {
-          score = -this.alphaBeta(depth - 1, -beta, -alpha, isPV, ply + 1);
+        if (!givesCheck) {
+          this.stats.futilityPrunes++;
+          continue; // Skip this move
         }
       }
       
-      this.chess.undo();
+      this.chess.move(move.san);
+      let score: number;
+      
+      try {
+        // PVS: Search first move with full window, others with null window
+        if (movesSearched === 0) {
+          score = -this.alphaBeta(depth - 1, -beta, -alpha, isPV, ply + 1);
+        } else {
+          // Late Move Reductions
+          let reduction = 0;
+          if (this.config.useLMR && depth >= 3 && movesSearched >= 3 && !inCheck && !move.captured) {
+            reduction = Math.floor(Math.sqrt(depth - 1) + Math.sqrt(movesSearched - 1));
+            if (isPV) reduction = Math.max(0, reduction - 1);
+            this.stats.lmrReductions++;
+          }
+          
+          // Null window search
+          score = -this.alphaBeta(depth - 1 - reduction, -alpha - 1, -alpha, false, ply + 1);
+          
+          // Re-search if failed high
+          if (score > alpha && (isPV || reduction > 0)) {
+            score = -this.alphaBeta(depth - 1, -beta, -alpha, isPV, ply + 1);
+          }
+        }
+      } finally {
+        this.chess.undo();
+      }
       
       if (this.stopSearch) return 0;
       
@@ -391,7 +553,7 @@ export class ChessSearch {
       movesSearched++;
     }
     
-    // Store in transposition table
+    // Store in transposition table with proper Zobrist hash
     let ttType: TTEntryType;
     if (bestScore <= origAlpha) {
       ttType = 'UPPER';
@@ -401,7 +563,7 @@ export class ChessSearch {
       ttType = 'EXACT';
     }
     
-    this.storeEntry(hash, depth, bestScore, ttType, bestMove);
+    this.tt.store(hash, depth, bestScore, ttType, bestMove);
     
     return bestScore;
   }
@@ -417,7 +579,14 @@ export class ChessSearch {
     }
     
     // Stand pat
-    const standPat = this.evaluator.evaluate(this.chess.fen());
+    const currentFen = this.chess.fen();
+    
+    // Safety check for illegal positions (missing king)
+    if (!currentFen.includes('k') || !currentFen.includes('K')) {
+      return 0; // Position is illegal, return draw score
+    }
+    
+    const standPat = this.evaluator.evaluateFromChess(this.chess);
     
     if (standPat >= beta) {
       return beta;
@@ -435,15 +604,24 @@ export class ChessSearch {
     captures.sort((a, b) => this.mvvLva(b) - this.mvvLva(a));
     
     for (const move of captures) {
+      // Ensure position is correct before making move
+      if (this.chess.fen() !== currentFen) {
+        this.chess.load(currentFen);
+      }
+      
       // Delta pruning - skip captures that can't improve alpha
       const captureValue = MVV_VALUES[move.captured as PieceType] * 100;
       if (standPat + captureValue + 200 < alpha) {
         continue;
       }
       
-      this.chess.move(move);
-      const score = -this.quiescence(-beta, -alpha, ply + 1);
-      this.chess.undo();
+      this.chess.move(move.san);
+      let score: number;
+      try {
+        score = -this.quiescence(-beta, -alpha, ply + 1);
+      } finally {
+        this.chess.undo();
+      }
       
       if (score >= beta) {
         return beta;
@@ -549,61 +727,6 @@ export class ChessSearch {
   }
 
   /**
-   * Compute position hash
-   */
-  private computeHash(): string {
-    const fen = this.chess.fen();
-    // Use first 4 parts of FEN (position, turn, castling, en passant)
-    return fen.split(' ').slice(0, 4).join(' ');
-  }
-
-  /**
-   * Store entry in transposition table
-   */
-  private storeEntry(
-    hash: string,
-    depth: number,
-    score: number,
-    type: TTEntryType,
-    bestMove: string
-  ): void {
-    const existing = this.tt.get(hash);
-    
-    // Replace if:
-    // - No existing entry
-    // - New entry is deeper
-    // - Existing entry is from older search
-    // - New entry is exact and old was bound
-    if (!existing || 
-        depth >= existing.depth || 
-        existing.age < this.ttAge ||
-        (type === 'EXACT' && existing.type !== 'EXACT')) {
-      
-      // Enforce size limit (rough)
-      if (this.tt.size > this.config.ttSizeMB * 1024 * 16) {
-        // Clear oldest entries
-        const toDelete: string[] = [];
-        for (const [key, entry] of this.tt) {
-          if (entry.age < this.ttAge - 1) {
-            toDelete.push(key);
-          }
-          if (toDelete.length > this.tt.size / 4) break;
-        }
-        toDelete.forEach(k => this.tt.delete(k));
-      }
-      
-      this.tt.set(hash, {
-        hash,
-        depth,
-        score,
-        type,
-        bestMove,
-        age: this.ttAge,
-      });
-    }
-  }
-
-  /**
    * Check if we should stop searching
    */
   private shouldStop(): boolean {
@@ -634,6 +757,7 @@ export class ChessSearch {
       ttCutoffs: 0,
       betaCutoffs: 0,
       nullMoveCutoffs: 0,
+      futilityPrunes: 0,
       lmrReductions: 0,
       qNodes: 0,
     };
@@ -651,7 +775,6 @@ export class ChessSearch {
    */
   clearTT(): void {
     this.tt.clear();
-    this.ttAge = 0;
   }
 
   /**
@@ -672,7 +795,7 @@ export class ChessSearch {
    * Get transposition table size
    */
   getTTSize(): number {
-    return this.tt.size;
+    return this.tt.getSize();
   }
 
   /**

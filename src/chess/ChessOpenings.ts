@@ -305,6 +305,142 @@ function addCommonResponses(): void {
     { move: 'c5', weight: 60 },
     { move: 'd5', weight: 50 },
   ]);
+  
+  // ========== EXPANDED OPENING LINES (Phase 2.5) ==========
+  
+  // Ruy Lopez main lines after 3...a6
+  addBookMoves('r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq -', [
+    { move: 'Ba4', weight: 100 },  // Main line
+    { move: 'Bxc6', weight: 40 },  // Exchange variation
+  ]);
+  
+  // Ruy Lopez after 4.Ba4
+  addBookMoves('r1bqkbnr/1ppp1ppp/p1n5/4p3/B3P3/5N2/PPPP1PPP/RNBQK2R b KQkq -', [
+    { move: 'Nf6', weight: 100 },  // Berlin/Morphy
+    { move: 'b5', weight: 70 },    // Norwegian
+    { move: 'd6', weight: 40 },    // Steinitz deferred
+  ]);
+  
+  // Italian Game main line
+  addBookMoves('r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -', [
+    { move: 'Bc5', weight: 100 },  // Giuoco Piano
+    { move: 'Nf6', weight: 90 },   // Two Knights
+    { move: 'Be7', weight: 40 },   // Hungarian
+  ]);
+  
+  // Giuoco Piano after 3...Bc5
+  addBookMoves('r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -', [
+    { move: 'c3', weight: 100 },   // Main line
+    { move: 'd3', weight: 70 },    // Giuoco Pianissimo
+    { move: 'b4', weight: 40 },    // Evans Gambit
+  ]);
+  
+  // Sicilian Open after 2...d6 3.d4 cxd4 4.Nxd4
+  addBookMoves('rnbqkbnr/pp2pppp/3p4/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq -', [
+    { move: 'Nf6', weight: 100 },
+    { move: 'g6', weight: 50 },    // Accelerated Dragon
+    { move: 'e5', weight: 30 },    // Lowenthal
+  ]);
+  
+  // Sicilian after 4...Nf6 5.Nc3
+  addBookMoves('rnbqkb1r/pp2pppp/3p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R b KQkq -', [
+    { move: 'a6', weight: 100 },   // Najdorf
+    { move: 'e6', weight: 90 },    // Scheveningen
+    { move: 'g6', weight: 85 },    // Dragon
+    { move: 'Nc6', weight: 70 },   // Classical
+    { move: 'e5', weight: 60 },    // Sveshnikov/Kalashnikov
+  ]);
+  
+  // French Winawer after 3.Nc3 Bb4
+  addBookMoves('rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq -', [
+    { move: 'e5', weight: 100 },   // Advance
+    { move: 'exd5', weight: 60 },  // Exchange
+    { move: 'Bd2', weight: 40 },
+  ]);
+  
+  // French Tarrasch after 3.Nd2
+  addBookMoves('rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/3N4/PPP2PPP/R1BQKBNR b KQkq -', [
+    { move: 'Nf6', weight: 100 },
+    { move: 'c5', weight: 90 },
+    { move: 'dxe4', weight: 60 },
+  ]);
+  
+  // Caro-Kann Classical after 4...Bf5
+  addBookMoves('rn1qkbnr/pp2pppp/2p5/3pPb2/3P4/2N5/PPP2PPP/R1BQKBNR w KQkq -', [
+    { move: 'Nf3', weight: 100 },  // Classical main
+    { move: 'g4', weight: 60 },    // Bayonet attack
+    { move: 'Bd3', weight: 50 },
+  ]);
+  
+  // Queen's Gambit Declined main line
+  addBookMoves('rnbqkb1r/ppp2ppp/4pn2/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq -', [
+    { move: 'Bg5', weight: 100 },  // Orthodox
+    { move: 'cxd5', weight: 70 },  // Exchange
+    { move: 'Nf3', weight: 60 },
+    { move: 'Bf4', weight: 50 },
+  ]);
+  
+  // Slav Defense after 2...c6
+  addBookMoves('rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -', [
+    { move: 'Nf3', weight: 100 },
+    { move: 'Nc3', weight: 90 },
+    { move: 'e3', weight: 40 },
+  ]);
+  
+  // King's Indian after 3...Bg7 4.e4
+  addBookMoves('rnbqk2r/ppppppbp/5np1/8/2PPP3/2N5/PP3PPP/R1BQKBNR b KQkq -', [
+    { move: 'd6', weight: 100 },
+    { move: 'O-O', weight: 90 },
+    { move: 'd5', weight: 40 },    // Grunfeld
+  ]);
+  
+  // Grunfeld Defense
+  addBookMoves('rnbqkb1r/ppp1pp1p/5np1/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq -', [
+    { move: 'cxd5', weight: 100 },
+    { move: 'Nf3', weight: 70 },
+    { move: 'Bf4', weight: 50 },
+  ]);
+  
+  // London System development
+  addBookMoves('rnbqkb1r/ppp1pppp/5n2/3p4/3P1B2/8/PPP1PPPP/RN1QKBNR w KQkq -', [
+    { move: 'e3', weight: 100 },
+    { move: 'Nf3', weight: 90 },
+    { move: 'Nd2', weight: 60 },
+  ]);
+  
+  // Catalan Opening
+  addBookMoves('rnbqkb1r/pppp1ppp/4pn2/8/2PP4/6P1/PP2PP1P/RNBQKBNR b KQkq -', [
+    { move: 'd5', weight: 100 },
+    { move: 'Bb4+', weight: 60 },
+    { move: 'c5', weight: 50 },
+  ]);
+  
+  // English vs Symmetrical
+  addBookMoves('rnbqkbnr/pp1ppppp/8/2p5/2P5/8/PP1PPPPP/RNBQKBNR w KQkq -', [
+    { move: 'Nf3', weight: 100 },
+    { move: 'Nc3', weight: 80 },
+    { move: 'g3', weight: 70 },
+  ]);
+  
+  // Pirc Defense after 1.e4 d6
+  addBookMoves('rnbqkbnr/ppp1pppp/3p4/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -', [
+    { move: 'd4', weight: 100 },
+    { move: 'Nc3', weight: 60 },
+    { move: 'Nf3', weight: 50 },
+  ]);
+  
+  // Scandinavian after 1.e4 d5
+  addBookMoves('rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -', [
+    { move: 'exd5', weight: 100 },
+    { move: 'Nc3', weight: 40 },
+    { move: 'e5', weight: 30 },
+  ]);
+  
+  // Alekhine Defense after 1.e4 Nf6
+  addBookMoves('rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -', [
+    { move: 'e5', weight: 100 },
+    { move: 'Nc3', weight: 40 },
+  ]);
 }
 
 /**

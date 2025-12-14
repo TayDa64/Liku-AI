@@ -229,10 +229,13 @@ export interface EvaluationBreakdown {
 /** Transposition table entry type */
 export type TTEntryType = 'EXACT' | 'LOWER' | 'UPPER';
 
-/** Transposition table entry */
+/**
+ * Transposition table entry
+ * Uses BigInt for proper 64-bit Zobrist hashing
+ */
 export interface TTEntry {
-  /** Position hash */
-  hash: string;
+  /** Position hash (64-bit Zobrist key) */
+  hash: bigint;
   /** Search depth */
   depth: number;
   /** Evaluation score */
@@ -242,6 +245,19 @@ export interface TTEntry {
   /** Best move found */
   bestMove: string;
   /** Age (for replacement strategy) */
+  age: number;
+}
+
+/**
+ * Legacy TT entry with string hash (for backward compatibility)
+ * @deprecated Use TTEntry with bigint hash instead
+ */
+export interface TTEntryLegacy {
+  hash: string;
+  depth: number;
+  score: number;
+  type: TTEntryType;
+  bestMove: string;
   age: number;
 }
 
@@ -265,6 +281,8 @@ export interface SearchStats {
   betaCutoffs: number;
   /** Null move cutoffs */
   nullMoveCutoffs: number;
+  /** Futility prunes */
+  futilityPrunes: number;
   /** Late move reductions */
   lmrReductions: number;
   /** Quiescence nodes */
@@ -550,6 +568,8 @@ export interface SearchConfig {
   useLMR: boolean;
   /** Use Null Move Pruning */
   useNullMove: boolean;
+  /** Use Futility Pruning */
+  useFutilityPruning: boolean;
   /** Use aspiration windows */
   useAspirationWindows: boolean;
   /** Use Principal Variation Search */
@@ -601,6 +621,7 @@ export const DEFAULT_SEARCH_CONFIG: SearchConfig = {
   useHistoryHeuristic: true,
   useLMR: true,
   useNullMove: true,
+  useFutilityPruning: true,
   useAspirationWindows: true,
   usePVS: true,
   maxQuiescenceDepth: 8,

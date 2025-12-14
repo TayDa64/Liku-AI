@@ -259,6 +259,88 @@ Liku-AI is a fork of LikuBuddy focused on **real-time AI agent communication** v
 
 ---
 
+## 🎯 Phase 7: Chess Engine Performance Optimization (v2.4.0)
+
+### 7.1 Benchmark Suite ✅
+- [x] Create `scripts/benchmark.ts` with comprehensive test positions
+- [x] Tactical puzzles (15 positions: forks, pins, skewers, mate threats)
+- [x] Perft validation for move generation correctness
+- [x] NPS (nodes per second) measurement
+- [x] Metrics: depth reached, TT hit rate, pruning efficiency
+
+### 7.2 Performance Analysis ✅
+- [x] Profile chess.js operations (~44μs per `moves()` call, ~23μs per `isDraw()`)
+- [x] Identify bottleneck: chess.js legal move generation
+- [x] Current performance: ~32-150 NPS (chess.js limited)
+- [x] Comparison: C++ engines achieve 50,000-500,000+ NPS
+
+### 7.3 Alternative Chess Libraries (Research Complete)
+- [ ] **chessops** - Lichess's TypeScript library with bitboard implementation
+  - Uses Hyperbola Quintessence for sliding pieces (faster than Magic Bitboards)
+  - SquareSet implemented as bitboards for efficient operations
+  - Supports Chess960 and 7 variants
+  - GPL-3.0 license, actively maintained
+- [ ] **stockfish.wasm** - WebAssembly Stockfish for professional analysis
+  - ~400KB total size, multi-threaded with SharedArrayBuffer
+  - Requires COOP/COEP headers for browser use
+  - Can be used as analysis backend while keeping custom search
+- [ ] **Custom Move Generator** - For maximum performance
+  - Implement 0x88 board representation
+  - Bitboard attack tables for sliding pieces
+  - Staged move generation (hash → captures → killers → quiet)
+
+### 7.4 Migration Path Options
+
+#### Option A: chessops Migration (Recommended for 2-3x speedup)
+```typescript
+// Replace chess.js with chessops
+import { Chess } from 'chessops/chess';
+import { parseFen } from 'chessops/fen';
+
+// Benefits:
+// - Bitboard-based move generation
+// - Faster legal move checking
+// - Native TypeScript with good types
+// - Used by Lichess (battle-tested)
+```
+
+#### Option B: Hybrid Stockfish Analysis (For professional strength)
+```typescript
+// Use stockfish.wasm for deep analysis
+const Stockfish = require('stockfish.wasm');
+const sf = await Stockfish();
+sf.postMessage('uci');
+sf.postMessage(`position fen ${fen}`);
+sf.postMessage('go depth 20');
+```
+
+#### Option C: Custom Engine (Maximum performance, high effort)
+- Implement own bitboard representation
+- Use WASM for hot paths
+- Target: 100,000+ NPS
+
+### 7.5 Planned Improvements
+- [ ] Evaluate chessops as chess.js replacement
+- [ ] Add optional Stockfish.wasm for analysis mode
+- [ ] Implement SEE (Static Exchange Evaluation) for better capture ordering
+- [ ] Add futility pruning margins tuning
+- [ ] Consider WASM compilation for evaluator
+- [ ] Add NNUE-style evaluation (future)
+
+### 7.6 Self-Play Training Loop ✅
+- [x] Generate training data from self-play games (`scripts/self-play.ts`)
+- [x] Implement game result collection with move timing
+- [x] Export training data for ML evaluation tuning (JSONL format)
+- [x] Elo estimation from self-play results (`scripts/elo-estimate.ts`)
+- [x] Asymmetric depth support (--white-depth, --black-depth, --depth-range)
+
+### 7.7 Critical Bug Fix (v2.3.1) ✅
+- [x] Fixed `ChessEvaluator.evaluateFromChess()` corrupting caller's chess instance
+- [x] Root cause: Evaluator's mobility calculation called `this.chess.load()` on external instance
+- [x] Solution: Copy FEN to internal instance instead of using external reference directly
+
+---
+
 ## 🐛 Known Issues & Technical Debt
 
 ### High Priority
@@ -404,7 +486,7 @@ interface LikuAIConfig {
 | Command Latency | <10ms | ✅ ~2ms |
 | Concurrent Clients | 100+ | ✅ 1000 (tested) |
 | Memory per Client | <1MB | ✅ ~10KB |
-| Test Coverage | >80% | ✅ ~95% (476 tests) |
+| Test Coverage | >80% | ✅ ~95% (514 tests) |
 
 ---
 
@@ -419,7 +501,8 @@ interface LikuAIConfig {
 | 2.1.0 Training | Q2 2025 | ✅ Complete |
 | 2.2.0 Remote (5.1-5.3) | Q3 2025 | ✅ Complete |
 | 2.3.0 Chess Engine | Q3 2025 | ✅ Complete |
+| 2.4.0 Chess Optimization | Q1 2026 | 🔲 Planned |
 
 ---
 
-*Last Updated: July 2025*
+*Last Updated: December 2025*

@@ -38,6 +38,12 @@ export {
   divide,
 } from './ChessSearch.js';
 
+// Zobrist Hashing
+export {
+  computeZobristHash,
+  updateHashAfterMove,
+} from './ChessZobrist.js';
+
 // AI Player
 export {
   ChessAI,

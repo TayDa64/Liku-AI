@@ -548,14 +548,25 @@ interface BookMove {
 
 ## 📊 Performance Targets
 
+### Current (chess.js-based, post v2.3.1 fix)
+| Metric | Actual | Notes |
+|--------|--------|-------|
+| Move generation | ~44μs | chess.js `moves()` call |
+| Position evaluation | <1ms | Fixed - no longer corrupts state |
+| Search (depth 3) | ~1s | Tested: 175 nodes, 171 NPS |
+| Search (depth 4) | ~3s | Limited by move generation |
+| Memory usage | <100MB | Including TT |
+| NPS (nodes/second) | 100-200 | **chess.js bottleneck** |
+
+### Target (with chessops or custom)
 | Metric | Target | Notes |
 |--------|--------|-------|
-| Move generation | <1ms | chess.js is fast |
-| Position evaluation | <5ms | Full evaluation |
-| Search (depth 6) | <5s | With all enhancements |
+| Move generation | <5μs | Bitboard-based |
+| Position evaluation | <1ms | Already optimized |
+| Search (depth 6) | <5s | With 10k+ NPS |
 | Search (depth 8) | <30s | Deep analysis |
 | Memory usage | <100MB | Including TT |
-| NPS (nodes/second) | 100k+ | Modern hardware |
+| NPS (nodes/second) | 10k-50k | With chessops migration |
 
 ---
 
@@ -623,7 +634,7 @@ const MATE_PUZZLES = [
 - [x] Comprehensive evaluation function
 - [x] Opening book for first 10-15 moves (20+ openings)
 - [x] Position analysis with PV display
-- [ ] Elo rating estimation
+- [x] Elo rating estimation (scripts/elo-estimate.ts)
 
 ### Professional Features
 - [ ] Time controls (bullet, blitz, rapid)
@@ -634,7 +645,151 @@ const MATE_PUZZLES = [
 
 ---
 
-## 🗓️ Timeline - COMPLETED
+## � Next Steps: Performance Optimization
+
+### Current Performance Baseline
+| Metric | Current | Target | Notes |
+|--------|---------|--------|-------|
+| NPS | 32-150 | 10,000+ | chess.js bottleneck |
+| Depth (5s) | 3-4 | 8+ | Limited by NPS |
+| Puzzle Accuracy | 0% | 60%+ | Need depth 6+ for tactics |
+
+### Optimization Path 1: chessops Migration (Recommended)
+
+**Library**: [chessops](https://www.npmjs.com/package/chessops) by Lichess
+- TypeScript with bitboard-based move generation
+- Uses Hyperbola Quintessence (faster than Magic Bitboards to initialize)
+- SquareSet for efficient square operations
+- FEN/PGN/SAN parsing built-in
+- Chess960 and variant support
+
+**Migration Steps**:
+1. Add chessops dependency: `npm install chessops`
+2. Create `ChessEngineV2.ts` using chessops
+3. Benchmark against chess.js implementation
+4. Migrate ChessSearch to use new engine
+5. Update ChessEvaluator for chessops board format
+
+**Expected Improvement**: 2-5x NPS increase
+
+```typescript
+// Example chessops usage
+import { Chess } from 'chessops/chess';
+import { parseFen, makeFen } from 'chessops/fen';
+import { makeSan, parseSan } from 'chessops/san';
+
+const setup = parseFen(fen).unwrap();
+const pos = Chess.fromSetup(setup).unwrap();
+
+// Legal moves with bitboard operations
+for (const move of pos.allMoves()) {
+  const san = makeSan(pos, move);
+  // ...
+}
+```
+
+### Optimization Path 2: Stockfish.wasm Integration
+
+**Library**: [stockfish.wasm](https://www.npmjs.com/package/stockfish.wasm)
+- WebAssembly port of Stockfish 14
+- Multi-threaded with SharedArrayBuffer
+- ~400KB total size
+- 2000+ Elo strength
+
+**Use Cases**:
+- Analysis mode ("Show engine evaluation")
+- Hint generation for strong play
+- Endgame tablebase queries
+- Position validation
+
+**Browser Requirements**:
+```
+Cross-Origin-Embedder-Policy: require-corp
+Cross-Origin-Opener-Policy: same-origin
+```
+
+**Integration Pattern**:
+```typescript
+import Stockfish from 'stockfish.wasm';
+
+class StockfishAnalyzer {
+  private sf: any;
+  
+  async init() {
+    this.sf = await Stockfish();
+    this.sf.postMessage('uci');
+    await this.waitForReady();
+  }
+  
+  async analyze(fen: string, depth: number): Promise<Analysis> {
+    this.sf.postMessage(`position fen ${fen}`);
+    this.sf.postMessage(`go depth ${depth}`);
+    // Parse bestmove and info lines
+  }
+}
+```
+
+### Optimization Path 3: Custom Engine Components
+
+**SEE (Static Exchange Evaluation)**:
+```typescript
+// Determine if capture sequence is winning
+function see(pos: Position, move: Move): number {
+  // Returns material gain/loss from capture sequence
+}
+```
+
+**Staged Move Generation**:
+1. Hash move (from TT)
+2. Good captures (SEE >= 0)
+3. Killer moves
+4. Bad captures (SEE < 0)
+5. Quiet moves (ordered by history)
+
+**Lazy SMP (future)**:
+- Multiple search threads
+- Shared transposition table
+- Linear speedup up to 4-8 cores
+
+### Optimization Path 4: NNUE Evaluation (Future)
+
+**What is NNUE**:
+- Efficiently Updatable Neural Network
+- Used by Stockfish for +300 Elo over handcrafted eval
+- Incrementally updated when pieces move
+
+**Implementation Options**:
+1. Use stockfish.wasm (has NNUE built-in)
+2. Train custom NNUE from self-play data
+3. Port existing NNUE weights to TypeScript/WASM
+
+---
+
+## 📊 Benchmark Suite
+
+**Location**: `scripts/benchmark.ts`
+
+**Test Categories**:
+1. Tactical Puzzles (15 positions)
+2. Perft Validation (move generation correctness)
+3. Opening Book Coverage
+4. Performance Metrics
+
+**Running Benchmarks**:
+```bash
+# Quick benchmark (5s per position)
+npx tsx scripts/benchmark.ts --quick
+
+# Full benchmark (30s per position)
+npx tsx scripts/benchmark.ts
+
+# Verbose output
+npx tsx scripts/benchmark.ts --quick --verbose
+```
+
+---
+
+## �🗓️ Timeline - COMPLETED
 
 | Phase | Estimated | Actual | Status |
 |-------|-----------|--------|--------|
