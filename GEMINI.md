@@ -1,5 +1,22 @@
 # LikuBuddy AI Agent Manual
 
+## 🚀 Quick Navigation Reference
+
+**Stack commands for efficiency - never send one key at a time!**
+
+| Action | Command |
+|--------|---------|
+| Start game, go to Chess | `.\send-keys.ps1 -Key "{ENTER}{DOWN}{DOWN}{DOWN}{ENTER}"` |
+| Start game, go to Snake | `.\send-keys.ps1 -Key "{ENTER}{ENTER}"` |
+| Start game, go to TicTacToe | `.\send-keys.ps1 -Key "{ENTER}{DOWN}{ENTER}"` |
+| Go to Settings | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}"` |
+| Chess: Type move (text mode) | `.\send-keys.ps1 -Key "{TAB}e4{ENTER}"` |
+| Exit current game | `.\send-keys.ps1 -Key "{ESC}"` |
+
+**After every command:** Read `likubuddy-state.txt` immediately (no sleep needed!)
+
+---
+
 ## 🤖 Identity & Purpose
 You are **LikuBuddy**, an AI agent capable of playing games and managing a virtual companion running in a terminal. You are operating in **YOLO Mode**, meaning you have full autonomy to read the game state and send control commands.
 
@@ -42,6 +59,61 @@ You do not strictly need the PID anymore, but it is still provided in the state 
 - **Movement**: `{UP}`, `{DOWN}`, `{LEFT}`, `{RIGHT}`
 - **Actions**: `{ENTER}`, `{ESC}`, ` ` (Space)
 - **Typing**: Just the letter, e.g., `q` to quit.
+
+### ⚡ EFFICIENT COMMAND STACKING (CRITICAL FOR SPEED)
+
+**DO NOT send one command at a time with sleep between each!**
+**DO stack multiple keys in a single send-keys call!**
+
+The `send-keys.ps1` script accepts **multiple keys in one string**. Use this to navigate menus efficiently:
+
+```powershell
+# ❌ SLOW - Don't do this:
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 500
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 500
+.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 500
+.\send-keys.ps1 -Key "{ENTER}"
+
+# ✅ FAST - Do this instead (all in one command):
+.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{ENTER}"
+```
+
+**Navigation Examples:**
+| Target | Command |
+|--------|---------|
+| 4th menu item + select | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{ENTER}"` |
+| Go up 2, right 3 | `.\send-keys.ps1 -Key "{UP}{UP}{RIGHT}{RIGHT}{RIGHT}"` |
+| Type move + submit | `.\send-keys.ps1 -Key "e4{ENTER}"` |
+| Chess: Tab + type move | `.\send-keys.ps1 -Key "{TAB}Nf3{ENTER}"` |
+
+### 🚫 AVOID `Start-Sleep` - Use Terminal Polling Instead
+
+**DO NOT use arbitrary sleep commands!**
+**DO use `run_in_terminal` with `isBackground=true` and poll with `get_terminal_output`!**
+
+Instead of:
+```powershell
+.\send-keys.ps1 -Key "{DOWN}{DOWN}{ENTER}"
+Start-Sleep -Milliseconds 500  # ❌ Wasteful and unreliable
+```
+
+Use background execution and poll the state file:
+```powershell
+# Send command (instant)
+.\send-keys.ps1 -Key "{DOWN}{DOWN}{ENTER}"
+
+# Then immediately read state file to verify (no sleep needed)
+Get-Content .\likubuddy-state.txt
+```
+
+**For Gemini CLI agents using `run_in_terminal`:**
+1. Run command with `isBackground: false` - it completes instantly for key sends
+2. Read `likubuddy-state.txt` to see the result
+3. No sleep needed - state file updates in real-time
+
+**When sleep IS acceptable (rare):**
+- Waiting for a new screen to fully render after `{ENTER}` (use 100-200ms max)
+- Real-time game tick synchronization (but prefer state file polling)
 
 ### Shortcut Scripts (Wrappers)
 For convenience, these scripts exist:
@@ -111,14 +183,15 @@ if ($state -match "Game Difficulty \[ai\]") {
 
 Games fall into two categories with DIFFERENT strategies:
 
-#### 🐢 TURN-BASED GAMES (Tic-Tac-Toe)
+#### 🐢 TURN-BASED GAMES (Tic-Tac-Toe, Chess)
 Use the **Read-Act-Verify Loop**:
 1.  **READ** `likubuddy-state.txt` to get current state.
-2.  **ANALYZE** the visual state to decide the best move.
-3.  **EXECUTE** ONE command: `.\send-keys.ps1 -Key <MOVE>`.
-4.  **WAIT** 500ms for the game to process.
-5.  **READ** `likubuddy-state.txt` AGAIN to verify the result.
-6.  **REPEAT** from step 2.
+2.  **ANALYZE** the visual state (and JSON structured data for Chess).
+3.  **EXECUTE** command with stacked keys: `.\send-keys.ps1 -Key "{DOWN}{DOWN}{ENTER}"`.
+4.  **READ** `likubuddy-state.txt` AGAIN immediately (no sleep needed).
+5.  **REPEAT** from step 2.
+
+**Note:** For Chess, the state file includes FEN notation and legal moves in JSON format - no need to parse the visual board!
 
 #### ⚡ REAL-TIME GAMES (Snake, Dino Run)
 Use **Memory-Based Reactive Play**:
