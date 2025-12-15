@@ -20,7 +20,7 @@
  *   --gemini-black         Use Gemini AI for black
  */
 
-import { ChessAI, ChessAIMatch } from '../src/chess/index.js';
+import { ChessAI, ChessAIMatch } from '../dist/chess/index.js';
 
 // =============================================================================
 // Command Line Parsing

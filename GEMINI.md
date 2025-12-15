@@ -307,7 +307,85 @@ WHILE gameState == PLAYING:
 1. `🐍 Play Snake` - Requires 10 energy
 2. `❌⭕ Tic-Tac-Toe` - Requires 5 energy
 3. `🦖 Dino Run` - Requires 10 energy
-4. `🔙 Back to Main Menu`
+4. `♟️ Play Chess` - Strategic chess vs AI
+5. `🔙 Back to Main Menu`
+
+### Chess (🐢 TURN-BASED - Read Every Move)
+- **Goal**: Checkmate the opponent's king.
+- **Controls**: 
+  - Arrow keys to move cursor on the board
+  - `{ENTER}` to select a piece, then move cursor to destination and `{ENTER}` again
+  - `{TAB}` to switch to text input mode (type moves like "e4", "Nf3", "O-O")
+  - `h` for hint, `u` for undo, `f` to flip board, `r` to resign
+- **Vision**: The state file includes **FEN notation** which is a complete machine-readable board representation.
+
+#### 🎯 CRITICAL: Reading Chess State
+The `likubuddy-state.txt` file includes a `STRUCTURED STATE (JSON)` section with:
+```json
+{
+  "type": "chess",
+  "fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1",
+  "turn": "w",
+  "legalMoves": ["a2a3", "a2a4", "b1a3", "b1c3", ...],
+  "legalMovesSan": ["a3", "a4", "Na3", "Nc3", ...],
+  "isCheck": false,
+  "isCheckmate": false,
+  "evaluation": 35,
+  "recommendations": ["White to move. 20 legal moves available.", ...]
+}
+```
+
+**FEN Explained**: `rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1`
+- Board position (rank 8 to rank 1, separated by `/`)
+- Lowercase = black pieces, Uppercase = white pieces
+- Numbers = empty squares
+- After the board: `turn` `castling-rights` `en-passant` `halfmove` `fullmove`
+
+#### 🧠 CHESS STRATEGY FOR AI:
+1. **Read the FEN** - Parse the complete board position
+2. **Check legalMoves** - Only these moves are valid
+3. **Use legalMovesSan** - Human-readable notation (e4, Nf3, Qxd7+, O-O)
+4. **Check evaluation** - Positive = white advantage (centipawns)
+5. **Watch for isCheck** - Must escape if in check
+
+#### 🎮 Making a Move (Cursor Mode):
+```powershell
+# Example: Play e4 (e2 to e4)
+# 1. Navigate to e2 (starting position usually has cursor near e2)
+# 2. Press ENTER to select pawn
+# 3. Navigate to e4
+# 4. Press ENTER to complete move
+$wshell = New-Object -ComObject WScript.Shell
+$wshell.AppActivate('LikuBuddy Game Window')
+$wshell.SendKeys("{DOWN}{DOWN}{ENTER}")  # Select pawn on e2
+Start-Sleep -ms 200
+$wshell.SendKeys("{UP}{UP}{ENTER}")      # Move to e4
+```
+
+#### 🎮 Making a Move (Text Mode - Recommended for AI):
+```powershell
+# Switch to text mode with TAB, then type the move
+$wshell.SendKeys("{TAB}")
+Start-Sleep -ms 100
+$wshell.SendKeys("e4{ENTER}")  # Standard algebraic notation
+```
+
+#### 📝 Move Notation Examples:
+- `e4` - Pawn to e4
+- `Nf3` - Knight to f3
+- `Bxc6` - Bishop captures on c6
+- `O-O` - Kingside castle
+- `O-O-O` - Queenside castle
+- `Qd7+` - Queen to d7 with check
+- `e8=Q` - Pawn promotes to queen
+
+### AI vs AI Chess Battle Script
+For running chess games without the UI:
+```powershell
+node scripts/chess-ai-battle.js --white intermediate --black intermediate --verbose
+```
+Options: `--white`, `--black` (difficulty: beginner/intermediate/advanced/grandmaster)
+
 
 ### Energy Management (CRITICAL)
 - **You CANNOT play games if energy is 0%!**
