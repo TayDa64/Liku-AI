@@ -2,18 +2,15 @@
 
 ## 🚀 Quick Navigation Reference
 
-**Stack commands for efficiency - never send one key at a time!**
+**Stack NAVIGATION keys only - send ENTER separately after polling!**
 
-| Action | Command |
-|--------|---------|
-| Start game, go to Chess | `.\send-keys.ps1 -Key "{ENTER}{DOWN}{DOWN}{DOWN}{ENTER}"` |
-| Start game, go to Snake | `.\send-keys.ps1 -Key "{ENTER}{ENTER}"` |
-| Start game, go to TicTacToe | `.\send-keys.ps1 -Key "{ENTER}{DOWN}{ENTER}"` |
-| Go to Settings | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}"` |
-| Chess: Type move (text mode) | `.\send-keys.ps1 -Key "{TAB}e4{ENTER}"` |
-| Exit current game | `.\send-keys.ps1 -Key "{ESC}"` |
+| Action | Step 1: Navigate | Step 2: Poll State | Step 3: Confirm |
+|--------|------------------|-------------------|-----------------|
+| Go to Chess | `.\send-keys.ps1 -Key "{ENTER}"` then `"{DOWN}{DOWN}{DOWN}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
+| Go to Snake | `.\send-keys.ps1 -Key "{ENTER}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
+| Go to Settings | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
 
-**After every command:** Read `likubuddy-state.txt` immediately (no sleep needed!)
+**Pattern:** Navigate → Poll → Confirm (never blind ENTER after navigation)
 
 ---
 
@@ -62,31 +59,34 @@ You do not strictly need the PID anymore, but it is still provided in the state 
 
 ### ⚡ EFFICIENT COMMAND STACKING (CRITICAL FOR SPEED)
 
-**DO NOT send one command at a time with sleep between each!**
-**DO stack multiple keys in a single send-keys call!**
+**Stack NAVIGATION keys (UP/DOWN/LEFT/RIGHT) - but send ENTER separately!**
 
-The `send-keys.ps1` script accepts **multiple keys in one string**. Use this to navigate menus efficiently:
+The terminal can get out of sync if you blindly send ENTER with navigation. Use this pattern:
 
 ```powershell
-# ❌ SLOW - Don't do this:
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 500
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 500
-.\send-keys.ps1 -Key "{DOWN}"; Start-Sleep -ms 500
-.\send-keys.ps1 -Key "{ENTER}"
+# ✅ CORRECT PATTERN: Navigate → Poll → Confirm
+.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}"   # Navigate to option
+Get-Content .\likubuddy-state.txt           # Verify cursor position
+.\send-keys.ps1 -Key "{ENTER}"              # Confirm selection
 
-# ✅ FAST - Do this instead (all in one command):
-.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{ENTER}"
+# ❌ WRONG - Don't stack ENTER with navigation blindly:
+.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{ENTER}"  # May get out of sync!
 ```
 
-**Navigation Examples:**
-| Target | Command |
-|--------|---------|
-| 4th menu item + select | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{ENTER}"` |
-| Go up 2, right 3 | `.\send-keys.ps1 -Key "{UP}{UP}{RIGHT}{RIGHT}{RIGHT}"` |
-| Type move + submit | `.\send-keys.ps1 -Key "e4{ENTER}"` |
-| Chess: Tab + type move | `.\send-keys.ps1 -Key "{TAB}Nf3{ENTER}"` |
+**Navigation Stacking Examples (safe to stack):**
+| Navigation | Command |
+|------------|---------|
+| Move down 4 items | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{DOWN}"` |
+| Move cursor on board | `.\send-keys.ps1 -Key "{UP}{UP}{RIGHT}{RIGHT}"` |
+| Multiple escapes | `.\send-keys.ps1 -Key "{ESC}{ESC}"` |
 
-### 🚫 AVOID `Start-Sleep` - Use Terminal Polling Instead
+**Actions requiring poll first (send separately):**
+| Action | Command |
+|--------|---------|
+| Select/Confirm | `.\send-keys.ps1 -Key "{ENTER}"` |
+| Chess text move | `.\send-keys.ps1 -Key "{TAB}"` → poll → `.\send-keys.ps1 -Key "e4{ENTER}"` |
+
+### 🚫 AVOID `Start-Sleep` - Use State File Polling Instead
 
 **DO NOT use arbitrary sleep commands!**
 **DO use `run_in_terminal` with `isBackground=true` and poll with `get_terminal_output`!**

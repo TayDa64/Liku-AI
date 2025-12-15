@@ -20,7 +20,7 @@
  *   --gemini-black         Use Gemini AI for black
  */
 
-import { ChessAI, ChessAIMatch } from '../dist/chess/index.js';
+import { ChessAI } from '../dist/chess/index.js';
 
 // =============================================================================
 // Command Line Parsing
@@ -165,7 +165,7 @@ async function runMatch(options) {
   console.log(`Black: ${options.blackDifficulty}${options.geminiBlack ? ' (Gemini)' : ' (Minimax)'}`);
   console.log(`Games: ${options.games}\n`);
 
-  // Create AI players
+  // Create AI players directly (not through ChessAIMatch)
   const whiteAI = ChessAI.fromDifficulty(options.whiteDifficulty, {
     useGemini: options.geminiWhite,
   });
@@ -174,8 +174,8 @@ async function runMatch(options) {
     useGemini: options.geminiBlack,
   });
 
-  // Create match
-  const match = new ChessAIMatch(whiteAI, blackAI);
+  // Use ChessEngine directly instead of ChessAIMatch (which has interface mismatch)
+  const { ChessEngine } = await import('../dist/chess/index.js');
 
   // Stats tracking
   const results = {
@@ -191,7 +191,8 @@ async function runMatch(options) {
     console.log(`           GAME ${gameNum} of ${options.games}`);
     console.log(`────────────────────────────────────────\n`);
 
-    const gameResult = await playGame(match, options.verbose);
+    const engine = new ChessEngine();
+    const gameResult = await playGame(engine, whiteAI, blackAI, options.verbose);
     results.games.push(gameResult);
 
     // Update stats
@@ -222,30 +223,51 @@ async function runMatch(options) {
   return results;
 }
 
-async function playGame(match, verbose) {
-  // Reset match for new game
-  match.reset();
+async function playGame(engine, whiteAI, blackAI, verbose) {
+  // Reset engine for new game
+  engine.reset();
 
   const moves = [];
   let totalTime = 0;
 
-  while (!match.engine.isGameOver()) {
-    const turn = match.engine.turn();
-    const moveNum = Math.floor(match.engine.getState().moveNumber);
+  while (!engine.isGameOver()) {
+    const turn = engine.turn();
+    const moveNum = Math.floor(engine.getState().moveNumber);
     
     const startTime = Date.now();
-    const ai = turn === 'w' ? match.whiteAI : match.blackAI;
+    const ai = turn === 'w' ? whiteAI : blackAI;
+    const currentFen = engine.fen();
     
     try {
-      const moveResult = await ai.getBestMove(match.engine.fen());
+      const moveResult = await ai.getBestMove(currentFen);
       const moveTime = Date.now() - startTime;
       totalTime += moveTime;
 
+      // Validate move is in legal moves list
+      const legalMoves = engine.getMoves();
+      if (!legalMoves.includes(moveResult.move)) {
+        // Try to find a matching move (handle UCI vs SAN format)
+        const verboseMoves = engine.getMoves({ verbose: true });
+        const matchingMove = verboseMoves.find(m => 
+          m.san === moveResult.move || 
+          `${m.from}${m.to}` === moveResult.move ||
+          `${m.from}${m.to}${m.promotion || ''}` === moveResult.move
+        );
+        
+        if (!matchingMove) {
+          console.error(`Invalid move: ${moveResult.move}`);
+          console.error(`Legal moves: ${legalMoves.slice(0, 10).join(', ')}${legalMoves.length > 10 ? '...' : ''}`);
+          console.error(`FEN: ${currentFen}`);
+          break;
+        }
+        moveResult.move = matchingMove.san;
+      }
+
       // Make the move
-      const result = match.engine.move(moveResult.move);
+      const result = engine.move(moveResult.move);
       
       if (!result) {
-        console.error(`Invalid move: ${moveResult.move}`);
+        console.error(`Move execution failed: ${moveResult.move}`);
         break;
       }
 
@@ -253,7 +275,7 @@ async function playGame(match, verbose) {
         move: result.san,
         evaluation: moveResult.evaluation,
         time: moveTime,
-        fen: match.engine.fen(),
+        fen: engine.fen(),
       });
 
       if (verbose) {
@@ -261,8 +283,8 @@ async function playGame(match, verbose) {
         console.log(`${moveStr.padEnd(15)} eval: ${formatEval(moveResult.evaluation).padStart(7)}  time: ${formatTime(moveTime)}`);
         
         // Show board every 5 moves or at game end
-        if (moves.length % 10 === 0 || match.engine.isGameOver()) {
-          displayBoard(match.engine.fen());
+        if (moves.length % 10 === 0 || engine.isGameOver()) {
+          displayBoard(engine.fen());
         }
       } else if (moves.length % 10 === 0) {
         process.stdout.write('.');
@@ -274,7 +296,7 @@ async function playGame(match, verbose) {
   }
 
   // Determine result
-  const state = match.engine.getState();
+  const state = engine.getState();
   let result = '1/2-1/2';
   
   if (state.isCheckmate) {
@@ -284,15 +306,15 @@ async function playGame(match, verbose) {
   }
 
   if (verbose) {
-    displayBoard(match.engine.fen());
+    displayBoard(engine.fen());
   }
 
   return {
     result,
     moves,
     totalTime,
-    pgn: match.engine.pgn(),
-    fen: match.engine.fen(),
+    pgn: engine.pgn(),
+    fen: engine.fen(),
     reason: state.isCheckmate ? 'checkmate' : state.drawReason || 'unknown',
   };
 }

@@ -324,6 +324,21 @@ export class ChessSearch {
     
     const elapsed = Date.now() - this.searchStartTime;
     
+    // CRITICAL: Restore original position and validate bestMove is legal
+    // This guards against transposition table hash collisions returning stale moves
+    // AND against position being in wrong state after search
+    this.chess.load(fen);
+    const legalMoves = this.chess.moves();
+    if (bestMove && !legalMoves.includes(bestMove)) {
+      console.warn(`Search returned invalid move "${bestMove}" - falling back to first legal move`);
+      console.warn(`Legal moves: ${legalMoves.join(', ')}`);
+      console.warn(`FEN: ${fen}`);
+      // Fall back to first legal move (not ideal but safe)
+      bestMove = legalMoves[0] || '';
+      // Clear PV since it's corrupted
+      pv = bestMove ? [bestMove] : [];
+    }
+    
     return {
       bestMove,
       score: bestScore,
@@ -384,9 +399,18 @@ export class ChessSearch {
     const ttEntry = this.tt.probe(hash);
     let ttMove: string | null = null;
     
+    // Generate legal moves early - needed for TT validation and later move ordering
+    const currentFen = this.chess.fen();
+    const verboseMoves = this.chess.moves({ verbose: true }) as ChessJsMove[];
+    const legalMovesSan = verboseMoves.map(m => m.san);
+    
     if (ttEntry && ttEntry.depth >= depth) {
       this.stats.ttHits++;
-      ttMove = ttEntry.bestMove;
+      
+      // Validate TT move is legal in current position (guards against hash collisions)
+      if (ttEntry.bestMove && legalMovesSan.includes(ttEntry.bestMove)) {
+        ttMove = ttEntry.bestMove;
+      }
       
       if (!isPV) {
         if (ttEntry.type === 'EXACT') {
@@ -401,7 +425,10 @@ export class ChessSearch {
         }
       }
     } else if (ttEntry) {
-      ttMove = ttEntry.bestMove;
+      // Validate TT move even at lower depth
+      if (ttEntry.bestMove && legalMovesSan.includes(ttEntry.bestMove)) {
+        ttMove = ttEntry.bestMove;
+      }
     }
     
     // Null move pruning
@@ -452,9 +479,8 @@ export class ChessSearch {
       }
     }
     
-    // Generate and order moves
-    const currentFen = this.chess.fen();
-    const moves = this.orderMoves(this.chess.moves({ verbose: true }) as ChessJsMove[], ply, ttMove);
+    // Order moves (verboseMoves already generated above for TT validation)
+    const moves = this.orderMoves(verboseMoves, ply, ttMove);
     
     if (moves.length === 0) {
       // Checkmate or stalemate

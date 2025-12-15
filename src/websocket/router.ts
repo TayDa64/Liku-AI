@@ -13,6 +13,7 @@
 
 import { EventEmitter } from 'events';
 import type { AICommand, AIResponse } from './server.js';
+import { stateManager } from './state.js';
 import { 
   GameSessionManager, 
   gameSessionManager as defaultSessionManager,
@@ -1345,6 +1346,26 @@ export class CommandRouter extends EventEmitter {
             actions: Array.from(VALID_ACTIONS),
             keys: Array.from(VALID_KEYS),
           },
+          timestamp: Date.now(),
+        };
+
+      case 'gamestate':
+        // Return current unified game state directly
+        const currentState = stateManager.get();
+        return {
+          type: 'result',
+          requestId: command.requestId,
+          data: currentState ?? { error: 'No game state available' },
+          timestamp: Date.now(),
+        };
+
+      case 'history':
+        // Return recent state history
+        const history = stateManager.getHistory(10);
+        return {
+          type: 'result',
+          requestId: command.requestId,
+          data: { states: history, count: history.length },
           timestamp: Date.now(),
         };
 

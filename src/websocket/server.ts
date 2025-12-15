@@ -39,6 +39,7 @@ import {
   createError,
   validateMessage,
 } from './protocol.js';
+import { queryManager } from './queries.js';
 import type { UnifiedGameState } from './state.js';
 
 export interface GameState {
@@ -196,7 +197,14 @@ export class LikuWebSocketServer extends EventEmitter {
       this.emit('action', action, clientId);
     });
 
-    this.router.on('query', (query: string, clientId: string, callback: (result: unknown) => void) => {
+    this.router.on('query', async (query: string, clientId: string, callback: (result: unknown) => void) => {
+      // Use queryManager for built-in queries (gameState, history, stats, etc.)
+      try {
+        const result = await queryManager.execute(query);
+        callback(result);
+      } catch (err) {
+        callback({ success: false, error: (err as Error).message });
+      }
       this.emit('query', query, clientId, callback);
     });
 
