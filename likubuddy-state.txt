@@ -1,188 +1,27 @@
-PROCESS ID: 48520
-TIMESTAMP: 1765790109005
-CURRENT SCREEN: Playing Chess
-STATUS: White to move (Move #1)
+PROCESS ID: TERMINATED
+INTRO: Playing Grok 4.1 intro video for 9s (PID: 65824)
+INTRO: Playing Claude Opus 4.5 intro video for 10s (PID: 70728)
+INTRO: Playing Gemini 3 intro video for 10s (PID: 112648)
+INTRO: Playing ChatGPT 5.1 intro video for 10s (PID: 85136)
+INTRO: Playing Grok 4.1 intro video for 10s (PID: 47268)
+INTRO: Playing Grok 4.1 intro video for 10s (PID: 92668)
+INTRO: Playing ChatGPT 5.1 intro video for 8s (PID: 99612)
+INTRO: Playing Gemini 3 intro video for 8s (PID: 18052)
+INTRO: Playing Claude Opus 4.5 intro video for 10s (PID: 45800)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 125580)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 106288)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 109188)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 94420)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 62316)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 123736)
+INTRO: Playing Claude Opus 4.5 intro video for 7s (PID: 116784)
+INTRO: Playing Claude Opus 4.5 intro video for 8s (PID: 48320)
+INTRO: Playing Claude Opus 4.5 intro video for 8s (PID: 37540)
+INTRO: Playing Claude Opus 4.5 intro video for 8s (PID: 113888)
+CURRENT SCREEN: Application Closed
+STATUS: The LikuBuddy application has exited.
 
 VISUAL STATE:
-    a   b   c   d   e   f   g   h
-  +---+---+---+---+---+---+---+---+
-8 | r | n | b | q | k | b | n | r | 8
-  +---+---+---+---+---+---+---+---+
-7 | p | p | p | p | p | p | p | p | 7
-  +---+---+---+---+---+---+---+---+
-6 | . | . | . | . | . | . | . | . | 6
-  +---+---+---+---+---+---+---+---+
-5 | . | . | . | . | . | . | . | . | 5
-  +---+---+---+---+---+---+---+---+
-4 | . | . | . | . | . | . | . | . | 4
-  +---+---+---+---+---+---+---+---+
-3 | . | . | . | . | . | . | . | . | 3
-  +---+---+---+---+---+---+---+---+
-2 | P | P | P | P | P | P | P | P | 2
-  +---+---+---+---+---+---+---+---+
-1 | R | N | B | Q | K | B | N | R | 1
-  +---+---+---+---+---+---+---+---+
-    a   b   c   d   e   f   g   h
+No active session. Start LikuBuddy with 'npm start' to begin.
 
-
-CONTROLS: Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit
-
---- STRUCTURED STATE (JSON) ---
-{
-  "type": "chess",
-  "isPlaying": true,
-  "isGameOver": false,
-  "fen": "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-  "turn": "w",
-  "moveNumber": 1,
-  "isPlayerTurn": true,
-  "playerColor": "w",
-  "board": [
-    [
-      "r",
-      "n",
-      "b",
-      "q",
-      "k",
-      "b",
-      "n",
-      "r"
-    ],
-    [
-      "p",
-      "p",
-      "p",
-      "p",
-      "p",
-      "p",
-      "p",
-      "p"
-    ],
-    [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    ],
-    [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    ],
-    [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    ],
-    [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      null
-    ],
-    [
-      "P",
-      "P",
-      "P",
-      "P",
-      "P",
-      "P",
-      "P",
-      "P"
-    ],
-    [
-      "R",
-      "N",
-      "B",
-      "Q",
-      "K",
-      "B",
-      "N",
-      "R"
-    ]
-  ],
-  "legalMoves": [
-    "a2a3",
-    "a2a4",
-    "b2b3",
-    "b2b4",
-    "c2c3",
-    "c2c4",
-    "d2d3",
-    "d2d4",
-    "e2e3",
-    "e2e4",
-    "f2f3",
-    "f2f4",
-    "g2g3",
-    "g2g4",
-    "h2h3",
-    "h2h4",
-    "b1a3",
-    "b1c3",
-    "g1f3",
-    "g1h3"
-  ],
-  "legalMovesSan": [
-    "a3",
-    "a4",
-    "b3",
-    "b4",
-    "c3",
-    "c4",
-    "d3",
-    "d4",
-    "e3",
-    "e4",
-    "f3",
-    "f4",
-    "g3",
-    "g4",
-    "h3",
-    "h4",
-    "Na3",
-    "Nc3",
-    "Nf3",
-    "Nh3"
-  ],
-  "isCheck": false,
-  "isCheckmate": false,
-  "isStalemate": false,
-  "isDraw": false,
-  "lastMove": null,
-  "capturedPieces": {
-    "white": [],
-    "black": []
-  },
-  "evaluation": 0,
-  "history": [],
-  "recommendations": [
-    "White to move. 20 legal moves available.",
-    "Opening: Starting position",
-    "Example moves: a3, a4, b3, b4, c3...",
-    "Position is roughly equal.",
-    "To move: send action \"chess_move\" with params { move: \"<SAN or UCI>\" }",
-    "Example: { \"action\": \"chess_move\", \"params\": { \"move\": \"e4\" } }"
-  ],
-  "difficulty": "intermediate",
-  "opening": "Starting position"
-}
---- END STRUCTURED STATE ---
+CONTROLS: N/A

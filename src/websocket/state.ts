@@ -171,6 +171,10 @@ export interface ChessGameState {
   
   // Opening name if recognized
   opening?: string;
+  
+  // Input mode: 'cursor' (arrow keys) or 'text' (SAN/UCI notation)
+  // AI should use text mode for faster, more reliable move entry
+  inputMode?: 'cursor' | 'text';
 }
 
 export type StructuredGameData = DinoGameState | SnakeGameState | TicTacToeGameState | ChessGameState | MenuState;
@@ -703,11 +707,13 @@ export function createChessState(params: {
   history: string[];
   difficulty?: string;
   opening?: string;
+  inputMode?: 'cursor' | 'text';
 }): ChessGameState {
   const {
     fen, turn, moveNumber, isPlayerTurn, playerColor,
     legalMoves, isCheck, isCheckmate, isStalemate, isDraw, drawReason,
-    lastMove, capturedPieces, evaluation, history, difficulty, opening
+    lastMove, capturedPieces, evaluation, history, difficulty, opening,
+    inputMode
   } = params;
 
   // Parse FEN to create board array
@@ -775,7 +781,12 @@ export function createChessState(params: {
       recommendations.push('Black has a significant advantage.');
     }
     
-    // AI instruction
+    // AI instruction based on input mode
+    if (inputMode === 'text') {
+      recommendations.push('Input mode: TEXT - Type SAN moves (e4, Nf3, O-O) then press Enter');
+    } else {
+      recommendations.push('Input mode: CURSOR - Use arrow keys + Enter (slower). Press Tab to switch to text mode.');
+    }
     recommendations.push(`To move: send action "chess_move" with params { move: "<SAN or UCI>" }`);
     recommendations.push(`Example: { "action": "chess_move", "params": { "move": "e4" } }`);
   }
@@ -804,5 +815,6 @@ export function createChessState(params: {
     recommendations,
     difficulty,
     opening,
+    inputMode,
   };
 }

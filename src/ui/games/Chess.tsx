@@ -168,22 +168,14 @@ function ChessBoard({
   };
 
   // Get foreground color for piece visibility on any background
+  // Simple: White pieces = blue, Black pieces = red (consistent across all squares)
   const getPieceColor = (piece: string | null, bgColor: string): string => {
     if (!piece) {
       // Empty square markers should contrast with background
       return bgColor === 'white' ? 'gray' : 'whiteBright';
     }
     const isWhitePiece = piece === piece.toUpperCase();
-    
-    // Ensure pieces are visible against any background
-    if (bgColor === 'white' || bgColor === 'yellow') {
-      return isWhitePiece ? 'blueBright' : 'black';
-    }
-    if (bgColor === 'cyan' || bgColor === 'green') {
-      return isWhitePiece ? 'whiteBright' : 'black';
-    }
-    // gray, blue backgrounds
-    return isWhitePiece ? 'whiteBright' : 'blackBright';
+    return isWhitePiece ? 'blueBright' : 'red';
   };
 
   // Chalk color mapping for backgrounds
@@ -204,6 +196,7 @@ function ChessBoard({
     whiteBright: chalk.whiteBright,
     gray: chalk.gray,
     blueBright: chalk.blueBright,
+    red: chalk.red,
   };
 
   // Build entire board row as single styled string using chalk
@@ -417,13 +410,83 @@ const Chess: React.FC<ChessProps> = ({
   const [moveInput, setMoveInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // Update helper
   const updateState = useCallback(() => {
     setGameState(engine.getState());
     setEvaluation(evaluator.evaluate(engine.fen()));
     setError(null);
+    setSuccessMsg(null);
   }, [engine, evaluator]);
+
+  // Explicit state logging helper - call after every state change
+  const logChessState = useCallback((customStatus?: string) => {
+    try {
+      const currentState = engine.getState();
+      const moves = engine.getMoves({ verbose: true }) as Move[];
+      const legalMoves = moves.map(m => ({ from: m.from, to: m.to, san: m.san }));
+      const isPlayerTurn = engine.turn() === playerColor;
+      const currentEval = evaluator.evaluate(engine.fen());
+
+      const fen = currentState.fen;
+      const board = parseFen(fen);
+      let visualBoard = '    a   b   c   d   e   f   g   h\n';
+      visualBoard += '  +---+---+---+---+---+---+---+---+\n';
+      for (let row = 0; row < 8; row++) {
+        const rank = 8 - row;
+        let rowStr = `${rank} |`;
+        for (let col = 0; col < 8; col++) {
+          const piece = board[row][col];
+          rowStr += ` ${piece || '.'} |`;
+        }
+        visualBoard += rowStr + ` ${rank}\n`;
+        visualBoard += '  +---+---+---+---+---+---+---+---+\n';
+      }
+      visualBoard += '    a   b   c   d   e   f   g   h\n';
+
+      const turnStr = currentState.turn === 'w' ? 'White' : 'Black';
+      let status = customStatus || `${turnStr} to move (Move #${currentState.moveNumber})`;
+      if (currentState.isCheckmate) status = `CHECKMATE! ${turnStr} loses.`;
+      else if (currentState.isStalemate) status = 'STALEMATE - Draw';
+      else if (currentState.isDraw) status = `DRAW: ${currentState.drawReason}`;
+      else if (currentState.isCheck) status += ' - CHECK!';
+
+      const controls = 'Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit';
+
+      const structuredState = createChessState({
+        fen: currentState.fen,
+        turn: currentState.turn,
+        moveNumber: currentState.moveNumber,
+        isPlayerTurn,
+        playerColor,
+        legalMoves,
+        isCheck: currentState.isCheck,
+        isCheckmate: currentState.isCheckmate,
+        isStalemate: currentState.isStalemate,
+        isDraw: currentState.isDraw,
+        drawReason: currentState.drawReason,
+        lastMove: currentState.lastMove ? {
+          from: currentState.lastMove.from,
+          to: currentState.lastMove.to,
+          san: currentState.lastMove.san,
+          piece: currentState.lastMove.piece,
+          captured: currentState.lastMove.captured,
+        } : null,
+        capturedPieces: currentState.capturedPieces,
+        evaluation: currentEval,
+        history: currentState.history,
+        difficulty,
+        opening: currentState.lastMove?.san ? undefined : 'Starting position',
+        inputMode: inputMode, // Include control mode so AI knows to use text or cursor
+      });
+
+      logGameState('Playing Chess', status, visualBoard, controls, structuredState);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logGameState('Playing Chess (Error)', `Error: ${errorMessage}`, 'Board unavailable', 'Esc: exit');
+    }
+  }, [engine, evaluator, playerColor, difficulty, inputMode]);
 
   // Get legal moves for square
   const getLegalTargets = useCallback((sq: string): Set<string> => {
@@ -436,16 +499,19 @@ const Chess: React.FC<ChessProps> = ({
     if (engine.isGameOver()) return;
     setThinking(true);
     setHint(null);
+    setSuccessMsg(null);
     try {
       const aiMove = await ai.getBestMove(engine.fen());
       engine.move(aiMove.move);
       updateState();
+      // Log state immediately after AI move
+      setTimeout(() => logChessState(`AI played ${aiMove.move}`), 50);
     } catch {
       setError('AI error');
     } finally {
       setThinking(false);
     }
-  }, [engine, ai, updateState]);
+  }, [engine, ai, updateState, logChessState]);
 
   // AI turn check
   useEffect(() => {
@@ -455,24 +521,18 @@ const Chess: React.FC<ChessProps> = ({
     }
   }, [mode, engine, playerColor, thinking, makeAIMove, gameState]);
 
-  // ==========================================================================
-  // AI State Logging - Log game state for external AI agents (Gemini CLI etc.)
-  // ==========================================================================
+  // Log initial state immediately when chess screen loads (like TicTacToe does)
   useEffect(() => {
-    // Get all legal moves with verbose info
+    // Build initial board state directly (don't rely on callbacks that may not be ready)
+    const initialFen = engine.fen();
+    const initialState = engine.getState();
     const moves = engine.getMoves({ verbose: true }) as Move[];
-    const legalMoves = moves.map(m => ({
-      from: m.from,
-      to: m.to,
-      san: m.san,
-    }));
-
-    // Determine if it's the player's turn
+    const legalMoves = moves.map(m => ({ from: m.from, to: m.to, san: m.san }));
     const isPlayerTurn = engine.turn() === playerColor;
+    const currentEval = evaluator.evaluate(initialFen);
 
-    // Build visual ASCII board for humans
-    const fen = gameState.fen;
-    const board = parseFen(fen);
+    // Build visual ASCII board
+    const board = parseFen(initialFen);
     let visualBoard = '    a   b   c   d   e   f   g   h\n';
     visualBoard += '  +---+---+---+---+---+---+---+---+\n';
     for (let row = 0; row < 8; row++) {
@@ -487,47 +547,122 @@ const Chess: React.FC<ChessProps> = ({
     }
     visualBoard += '    a   b   c   d   e   f   g   h\n';
 
-    // Status line
-    const turnStr = gameState.turn === 'w' ? 'White' : 'Black';
-    let status = `${turnStr} to move (Move #${gameState.moveNumber})`;
-    if (gameState.isCheckmate) status = `CHECKMATE! ${turnStr} loses.`;
-    else if (gameState.isStalemate) status = 'STALEMATE - Draw';
-    else if (gameState.isDraw) status = `DRAW: ${gameState.drawReason}`;
-    else if (gameState.isCheck) status += ' - CHECK!';
-    if (thinking) status += ' (AI thinking...)';
-
-    // Controls info
+    const status = 'White to move (Move #1) - Game ready';
     const controls = 'Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit';
 
-    // Create structured state for AI consumption
     const structuredState = createChessState({
-      fen: gameState.fen,
-      turn: gameState.turn,
-      moveNumber: gameState.moveNumber,
+      fen: initialFen,
+      turn: initialState.turn,
+      moveNumber: initialState.moveNumber,
       isPlayerTurn,
       playerColor,
       legalMoves,
-      isCheck: gameState.isCheck,
-      isCheckmate: gameState.isCheckmate,
-      isStalemate: gameState.isStalemate,
-      isDraw: gameState.isDraw,
-      drawReason: gameState.drawReason,
-      lastMove: gameState.lastMove ? {
-        from: gameState.lastMove.from,
-        to: gameState.lastMove.to,
-        san: gameState.lastMove.san,
-        piece: gameState.lastMove.piece,
-        captured: gameState.lastMove.captured,
-      } : null,
-      capturedPieces: gameState.capturedPieces,
-      evaluation,
-      history: gameState.history,
+      isCheck: initialState.isCheck,
+      isCheckmate: initialState.isCheckmate,
+      isStalemate: initialState.isStalemate,
+      isDraw: initialState.isDraw,
+      drawReason: initialState.drawReason,
+      lastMove: null,
+      capturedPieces: initialState.capturedPieces,
+      evaluation: currentEval,
+      history: [],
       difficulty,
-      opening: gameState.lastMove?.san ? undefined : 'Starting position',
+      opening: 'Starting position',
+      inputMode: 'cursor', // Default on load
     });
 
-    // Log to file and broadcast via WebSocket
     logGameState('Playing Chess', status, visualBoard, controls, structuredState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run only once on mount
+
+  // ==========================================================================
+  // AI State Logging - Log game state for external AI agents (Gemini CLI etc.)
+  // ==========================================================================
+  useEffect(() => {
+    try {
+      // Get all legal moves with verbose info
+      const moves = engine.getMoves({ verbose: true }) as Move[];
+      const legalMoves = moves.map(m => ({
+        from: m.from,
+        to: m.to,
+        san: m.san,
+      }));
+
+      // Determine if it's the player's turn
+      const isPlayerTurn = engine.turn() === playerColor;
+
+      // Build visual ASCII board for humans
+      const fen = gameState.fen;
+      if (!fen) throw new Error("FEN is missing from game state");
+
+      const board = parseFen(fen);
+      let visualBoard = '    a   b   c   d   e   f   g   h\n';
+      visualBoard += '  +---+---+---+---+---+---+---+---+\n';
+      for (let row = 0; row < 8; row++) {
+        const rank = 8 - row;
+        let rowStr = `${rank} |`;
+        for (let col = 0; col < 8; col++) {
+          const piece = board[row][col];
+          rowStr += ` ${piece || '.'} |`;
+        }
+        visualBoard += rowStr + ` ${rank}\n`;
+        visualBoard += '  +---+---+---+---+---+---+---+---+\n';
+      }
+      visualBoard += '    a   b   c   d   e   f   g   h\n';
+
+      // Status line
+      const turnStr = gameState.turn === 'w' ? 'White' : 'Black';
+      let status = `${turnStr} to move (Move #${gameState.moveNumber})`;
+      if (gameState.isCheckmate) status = `CHECKMATE! ${turnStr} loses.`;
+      else if (gameState.isStalemate) status = 'STALEMATE - Draw';
+      else if (gameState.isDraw) status = `DRAW: ${gameState.drawReason}`;
+      else if (gameState.isCheck) status += ' - CHECK!';
+      if (thinking) status += ' (AI thinking...)';
+
+      // Controls info
+      const controls = 'Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit';
+
+      // Create structured state for AI consumption
+      const structuredState = createChessState({
+        fen: gameState.fen,
+        turn: gameState.turn,
+        moveNumber: gameState.moveNumber,
+        isPlayerTurn,
+        playerColor,
+        legalMoves,
+        isCheck: gameState.isCheck,
+        isCheckmate: gameState.isCheckmate,
+        isStalemate: gameState.isStalemate,
+        isDraw: gameState.isDraw,
+        drawReason: gameState.drawReason,
+        lastMove: gameState.lastMove ? {
+          from: gameState.lastMove.from,
+          to: gameState.lastMove.to,
+          san: gameState.lastMove.san,
+          piece: gameState.lastMove.piece,
+          captured: gameState.lastMove.captured,
+        } : null,
+        capturedPieces: gameState.capturedPieces,
+        evaluation,
+        history: gameState.history,
+        difficulty,
+        opening: gameState.lastMove?.san ? undefined : 'Starting position',
+      });
+
+      // Log to file and broadcast via WebSocket
+      logGameState('Playing Chess', status, visualBoard, controls, structuredState);
+    } catch (err) {
+      // Fallback logging if something goes wrong to aid debugging
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logGameState(
+        'Playing Chess (Error)', 
+        `Error updating state: ${errorMessage}`, 
+        'Board unavailable due to error.\nCheck logs for details.', 
+        'Esc: exit'
+      );
+      // Also log to console for developer visibility
+      // console.error('Chess state logging error:', err);
+    }
   }, [gameState, evaluation, thinking, engine, playerColor, difficulty]);
   // ==========================================================================
 
@@ -584,13 +719,16 @@ const Chess: React.FC<ChessProps> = ({
         setSelectedSquare(null);
         setLegalTargets(new Set());
         setCursorState('selecting');
+        setSuccessMsg(`✓ Move: ${result.san}`);
         updateState();
         setHint(null);
+        // Log state immediately after player move
+        setTimeout(() => logChessState(`Player played ${result.san}`), 50);
       } else {
         setError('Move failed');
       }
     }
-  }, [cursorRow, cursorCol, cursorState, selectedSquare, legalTargets, engine, playerColor, mode, getLegalTargets, updateState]);
+  }, [cursorRow, cursorCol, cursorState, selectedSquare, legalTargets, engine, playerColor, mode, getLegalTargets, updateState, logChessState]);
 
   // Text submission
   const handleTextSubmit = useCallback((input: string) => {
@@ -598,6 +736,7 @@ const Chess: React.FC<ChessProps> = ({
     if (!m) return;
     setError(null);
     setHint(null);
+    setSuccessMsg(null);
 
     if (mode === 'ai' && engine.turn() !== playerColor) {
       setError("Not your turn!");
@@ -607,11 +746,14 @@ const Chess: React.FC<ChessProps> = ({
 
     if (engine.move(m)) {
       setMoveInput('');
+      setSuccessMsg(`✓ Move: ${m}`);
       updateState();
+      // Log state immediately after player move
+      setTimeout(() => logChessState(`Player played ${m}`), 50);
     } else {
       setError(`Invalid: ${m}`);
     }
-  }, [engine, mode, playerColor, updateState]);
+  }, [engine, mode, playerColor, updateState, logChessState]);
 
   // Undo
   const handleUndo = useCallback(() => {
@@ -620,9 +762,12 @@ const Chess: React.FC<ChessProps> = ({
     setSelectedSquare(null);
     setLegalTargets(new Set());
     setCursorState('selecting');
+    setSuccessMsg('Undo');
     updateState();
     setHint(null);
-  }, [engine, mode, updateState]);
+    // Log state after undo
+    setTimeout(() => logChessState('After undo'), 50);
+  }, [engine, mode, updateState, logChessState]);
 
   // Hint
   const handleHint = useCallback(async () => {
@@ -643,10 +788,13 @@ const Chess: React.FC<ChessProps> = ({
     setCursorState('selecting');
     setCursorRow(6);
     setCursorCol(4);
+    setSuccessMsg('New game started');
     updateState();
     setHint(null);
     setError(null);
-  }, [engine, updateState]);
+    // Log state for new game
+    setTimeout(() => logChessState('New game'), 50);
+  }, [engine, updateState, logChessState]);
 
   // Input handler
   useInput((input, key) => {
@@ -667,12 +815,16 @@ const Chess: React.FC<ChessProps> = ({
       return;
     }
 
-    const k = input.toLowerCase();
-    if (k === 'h') { handleHint(); return; }
-    if (k === 'u') { handleUndo(); return; }
-    if (k === 'f') { setFlipped(f => !f); return; }
-    if (k === 'r' && !engine.isGameOver()) { setError('You resigned!'); return; }
-    if (k === 'n') { handleNew(); return; }
+    // Guard hotkeys when in text mode - don't intercept letters that could be SAN moves
+    // (N for knight, H for files, etc.)
+    if (inputMode === 'cursor') {
+      const k = input.toLowerCase();
+      if (k === 'h') { handleHint(); return; }
+      if (k === 'u') { handleUndo(); return; }
+      if (k === 'f') { setFlipped(f => !f); return; }
+      if (k === 'r' && !engine.isGameOver()) { setError('You resigned!'); return; }
+      if (k === 'n') { handleNew(); return; }
+    }
 
     if (inputMode === 'cursor') {
       const dir = flipped ? -1 : 1;
@@ -720,7 +872,8 @@ const Chess: React.FC<ChessProps> = ({
         />
       </Box>
 
-      {/* Error */}
+      {/* Feedback */}
+      {successMsg && <Text color="green">{successMsg}</Text>}
       {error && <Text color="red">⚠ {error}</Text>}
 
       {/* Text input */}

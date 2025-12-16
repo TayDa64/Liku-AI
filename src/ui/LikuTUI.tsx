@@ -62,7 +62,7 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 	// --- AI State Logging ---
 	useEffect(() => {
 		// Don't log from LikuTUI when an actual game is active - the game component handles its own logging
-		const gameComponents = ['snake', 'tictactoe', 'dinorun'];
+		const gameComponents = ['snake', 'tictactoe', 'dinorun', 'chess', 'hangman', 'sudoku'];
 		if (activeGame && gameComponents.includes(activeGame)) {
 			return; // Let the game component handle logging
 		}

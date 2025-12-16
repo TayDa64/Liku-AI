@@ -68,9 +68,22 @@ export class QueryManager {
 
   /**
    * Register built-in query handlers
+   * NOTE: Query names are lowercase to match router's lowercase conversion
    */
   private registerBuiltinHandlers(): void {
-    // Current game state
+    // Current game state (lowercase to match router)
+    this.register('gamestate', () => {
+      const state = stateManager.get();
+      return {
+        success: state !== null,
+        data: state,
+        cached: false,
+        timestamp: Date.now(),
+        query: 'gamestate',
+      };
+    });
+
+    // Also register camelCase version for direct API calls
     this.register('gameState', () => {
       const state = stateManager.get();
       return {
@@ -83,6 +96,29 @@ export class QueryManager {
     });
 
     // Possible actions in current state
+    this.register('possibleactions', () => {
+      const state = stateManager.get();
+      if (!state?.game) {
+        return {
+          success: true,
+          data: { actions: [], context: 'no_game' },
+          cached: false,
+          timestamp: Date.now(),
+          query: 'possibleactions',
+        };
+      }
+
+      const actions = this.getActionsForGame(state.game.type, state);
+      return {
+        success: true,
+        data: { actions, context: state.game.type },
+        cached: false,
+        timestamp: Date.now(),
+        query: 'possibleactions',
+      };
+    });
+
+    // Also register camelCase version
     this.register('possibleActions', () => {
       const state = stateManager.get();
       if (!state?.game) {

@@ -1,12 +1,34 @@
 # LikuBuddy AI Agent Manual
 
+## ♟️ Chess AI Quick Start (Most Efficient Method)
+
+**Use TEXT MODE for chess - single command per move!**
+```powershell
+# 1. Navigate to Chess (from main menu)
+.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}"   # Navigate to Chess
+Get-Content .\likubuddy-state.txt            # Verify cursor
+.\send-keys.ps1 -Key "{ENTER}"               # Select Chess
+
+# 2. Switch to Text Mode (one-time)
+.\send-keys.ps1 -Key "{TAB}"
+
+# 3. Make moves - SINGLE COMMAND each! (move+ENTER is safe to chain)
+.\send-keys.ps1 -Key "e4{ENTER}"    # Your move
+Get-Content .\likubuddy-state.txt    # See AI response + new legal moves
+.\send-keys.ps1 -Key "Nf3{ENTER}"   # Next move
+```
+
+**Exception:** Text input (chess SAN moves) can safely chain with ENTER - no poll needed!
+
+---
+
 ## 🚀 Quick Navigation Reference
 
 **Stack NAVIGATION keys only - send ENTER separately after polling!**
 
 | Action | Step 1: Navigate | Step 2: Poll State | Step 3: Confirm |
 |--------|------------------|-------------------|-----------------|
-| Go to Chess | `.\send-keys.ps1 -Key "{ENTER}"` then `"{DOWN}{DOWN}{DOWN}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
+| Go to Chess | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
 | Go to Snake | `.\send-keys.ps1 -Key "{ENTER}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
 | Go to Settings | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}"` | Read state file | `.\send-keys.ps1 -Key "{ENTER}"` |
 
@@ -79,12 +101,13 @@ Get-Content .\likubuddy-state.txt           # Verify cursor position
 | Move down 4 items | `.\send-keys.ps1 -Key "{DOWN}{DOWN}{DOWN}{DOWN}"` |
 | Move cursor on board | `.\send-keys.ps1 -Key "{UP}{UP}{RIGHT}{RIGHT}"` |
 | Multiple escapes | `.\send-keys.ps1 -Key "{ESC}{ESC}"` |
+| **Chess text move** | `.\send-keys.ps1 -Key "e4{ENTER}"` ✅ (safe to chain!) |
 
 **Actions requiring poll first (send separately):**
 | Action | Command |
-|--------|---------|
-| Select/Confirm | `.\send-keys.ps1 -Key "{ENTER}"` |
-| Chess text move | `.\send-keys.ps1 -Key "{TAB}"` → poll → `.\send-keys.ps1 -Key "e4{ENTER}"` |
+|--------|--------|
+| Menu Select/Confirm | `.\send-keys.ps1 -Key "{ENTER}"` |
+| Cursor mode piece select | Navigate → Poll → `.\send-keys.ps1 -Key "{ENTER}"` |
 
 ### 🚫 AVOID `Start-Sleep` - Use State File Polling Instead
 
@@ -93,17 +116,21 @@ Get-Content .\likubuddy-state.txt           # Verify cursor position
 
 Instead of:
 ```powershell
-.\send-keys.ps1 -Key "{DOWN}{DOWN}{ENTER}"
+.\send-keys.ps1 -Key "{DOWN}{DOWN}"
 Start-Sleep -Milliseconds 500  # ❌ Wasteful and unreliable
+.\send-keys.ps1 -Key "{ENTER}"
 ```
 
-Use background execution and poll the state file:
+Use polling-based verification:
 ```powershell
-# Send command (instant)
-.\send-keys.ps1 -Key "{DOWN}{DOWN}{ENTER}"
+# Step 1: Navigate
+.\send-keys.ps1 -Key "{DOWN}{DOWN}"
 
-# Then immediately read state file to verify (no sleep needed)
+# Step 2: Verify position (instant - no sleep needed)
 Get-Content .\likubuddy-state.txt
+
+# Step 3: Confirm selection only after verifying cursor is correct
+.\send-keys.ps1 -Key "{ENTER}"
 ```
 
 **For Gemini CLI agents using `run_in_terminal`:**
@@ -142,15 +169,19 @@ Real-time games (Snake, Dino Run) normally update every 80-150ms which is TOO FA
 3. Change from easy/medium/hard to `ai`
 4. Press `{ESC}` to return to main menu
 
-**Optimized Single-Command Setup:**
+**Optimized Setup (Navigate → Poll → Confirm):**
 ```powershell
-# Fast batch key sending - no sleeps needed for menu navigation
 $wshell = New-Object -ComObject WScript.Shell
 $wshell.AppActivate('LikuBuddy Game Window')
-# Navigate to Settings (6 downs from top) + Enter
-$wshell.SendKeys("{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{ENTER}")
-Start-Sleep -ms 300  # Wait for Settings screen to load
-# Move to Difficulty (1 down), cycle to 'ai' (3 rights), exit
+
+# Step 1: Navigate to Settings (6 downs from top)
+$wshell.SendKeys("{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}{DOWN}")
+# Step 2: Poll state file to verify cursor on Settings
+Get-Content .\likubuddy-state.txt
+# Step 3: Enter Settings menu
+$wshell.SendKeys("{ENTER}")
+
+# Step 4: Navigate to Difficulty, cycle to 'ai', exit
 $wshell.SendKeys("{DOWN}{RIGHT}{RIGHT}{RIGHT}{ESC}")
 ```
 
@@ -187,9 +218,10 @@ Games fall into two categories with DIFFERENT strategies:
 Use the **Read-Act-Verify Loop**:
 1.  **READ** `likubuddy-state.txt` to get current state.
 2.  **ANALYZE** the visual state (and JSON structured data for Chess).
-3.  **EXECUTE** command with stacked keys: `.\send-keys.ps1 -Key "{DOWN}{DOWN}{ENTER}"`.
-4.  **READ** `likubuddy-state.txt` AGAIN immediately (no sleep needed).
-5.  **REPEAT** from step 2.
+3.  **NAVIGATE** to target: `.\send-keys.ps1 -Key "{DOWN}{DOWN}"`
+4.  **READ** state file to verify cursor is on correct position.
+5.  **CONFIRM** selection: `.\send-keys.ps1 -Key "{ENTER}"`
+6.  **READ** state file to see result, then **REPEAT** from step 2.
 
 **Note:** For Chess, the state file includes FEN notation and legal moves in JSON format - no need to parse the visual board!
 
@@ -203,12 +235,16 @@ Use **Memory-Based Reactive Play**:
 **Why?** Real-time games update every 80-150ms. Reading the file after every action is too slow. Trust your memory and pattern recognition.
 
 ### 2. Multi-Key Sequences (Navigation Optimization)
-Chain menu navigation keys without delays - the TUI handles rapid input:
+Chain navigation keys without delays - but send ENTER separately after verification:
 ```powershell
 $wshell = New-Object -ComObject WScript.Shell
 $wshell.AppActivate('LikuBuddy Game Window')
-# Send all navigation keys at once
-$wshell.SendKeys("{DOWN}{DOWN}{DOWN}{ENTER}")
+# Step 1: Navigate (safe to chain)
+$wshell.SendKeys("{DOWN}{DOWN}{DOWN}")
+# Step 2: Poll state file to verify cursor position
+Get-Content .\likubuddy-state.txt
+# Step 3: Confirm (only after verifying position)
+$wshell.SendKeys("{ENTER}")
 ```
 
 **Poll Instead of Sleep:**
@@ -423,25 +459,40 @@ The `likubuddy-state.txt` file includes a `STRUCTURED STATE (JSON)` section with
 
 #### 🎮 Making a Move (Cursor Mode):
 ```powershell
-# Example: Play e4 (e2 to e4)
-# 1. Navigate to e2 (starting position usually has cursor near e2)
-# 2. Press ENTER to select pawn
-# 3. Navigate to e4
-# 4. Press ENTER to complete move
+# Example: Play e4 (e2 to e4) - Use Navigate → Poll → Confirm pattern
 $wshell = New-Object -ComObject WScript.Shell
 $wshell.AppActivate('LikuBuddy Game Window')
-$wshell.SendKeys("{DOWN}{DOWN}{ENTER}")  # Select pawn on e2
-Start-Sleep -ms 200
-$wshell.SendKeys("{UP}{UP}{ENTER}")      # Move to e4
+
+# 1. Navigate to e2 pawn
+$wshell.SendKeys("{DOWN}{DOWN}")
+Get-Content .\likubuddy-state.txt  # Verify cursor on e2
+$wshell.SendKeys("{ENTER}")  # Select pawn
+
+# 2. Navigate to e4
+$wshell.SendKeys("{UP}{UP}")
+Get-Content .\likubuddy-state.txt  # Verify cursor on e4
+$wshell.SendKeys("{ENTER}")  # Complete move
 ```
 
-#### 🎮 Making a Move (Text Mode - Recommended for AI):
+#### 🎮 Making a Move (Text Mode - ⭐ RECOMMENDED FOR AI):
+Text mode is the most efficient for AI agents - type move + ENTER in a single command!
+
 ```powershell
-# Switch to text mode with TAB, then type the move
-$wshell.SendKeys("{TAB}")
-Start-Sleep -ms 100
-$wshell.SendKeys("e4{ENTER}")  # Standard algebraic notation
+# One-time setup: Switch to text mode
+.\send-keys.ps1 -Key "{TAB}"
+
+# Then for each move - single efficient command (no polling needed!):
+.\send-keys.ps1 -Key "e4{ENTER}"     # Pawn to e4
+.\send-keys.ps1 -Key "Nf3{ENTER}"    # Knight to f3  
+.\send-keys.ps1 -Key "O-O{ENTER}"    # Kingside castle
 ```
+
+**Why Text Mode is Best for AI:**
+- ✅ Single command per move (saves tokens!)
+- ✅ No cursor navigation required
+- ✅ No position verification needed
+- ✅ Direct SAN notation from legalMovesSan array
+- ✅ Move + ENTER can be safely chained
 
 #### 📝 Move Notation Examples:
 - `e4` - Pawn to e4

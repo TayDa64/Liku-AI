@@ -752,7 +752,19 @@ export class LikuWebSocketServer extends EventEmitter {
       // Route through CommandRouter (with rate limiting)
       if (this.config.enableRateLimiting) {
         const response = this.router.route(ws.likuId, command);
-        this.sendToClient(ws, response);
+        // Handle both sync and async responses (queries may return Promises)
+        if (response instanceof Promise) {
+          response.then(res => this.sendToClient(ws, res)).catch(err => {
+            this.sendToClient(ws, {
+              type: 'error',
+              requestId: command.requestId,
+              data: { message: err instanceof Error ? err.message : 'Query failed' },
+              timestamp: Date.now(),
+            });
+          });
+        } else {
+          this.sendToClient(ws, response);
+        }
       } else {
         // Direct handling without rate limiting
         this.emit('command', command, ws.likuId);

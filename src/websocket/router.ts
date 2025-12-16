@@ -1303,7 +1303,7 @@ export class CommandRouter extends EventEmitter {
    * Handle a query command
    */
   private handleQueryCommand(clientId: string, command: AICommand): AIResponse {
-    const query = command.payload.query?.toLowerCase();
+    const query = command.payload.query?.toLowerCase().trim();
 
     if (!query) {
       return this.errorResponse('Query is required', command.requestId);

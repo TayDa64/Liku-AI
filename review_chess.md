@@ -1,17 +1,28 @@
 # Chess Session Review
 
+## Root Cause Identified (Build After This Fix)
+
+**LikuTUI was overwriting Chess state logs!**
+
+In `LikuTUI.tsx`, the `gameComponents` array only included `['snake', 'tictactoe', 'dinorun']`. When Chess was active, LikuTUI continued logging its placeholder "(Game or Sub-screen Active)" which overwrote whatever Chess logged.
+
+**Fix applied**: Added `'chess', 'hangman', 'sudoku'` to the `gameComponents` array so LikuTUI stops logging when these games are active.
+
+**Visual bug fix**: Black pieces on dark squares were using `blackBright` which is invisible on gray backgrounds. Changed to `red` for visibility.
+
 ## Attempt Summary
-- First run (`node dist/index.js`, PID 33992) behaved exactly as GEMINI.md promised: once chess started, `likubuddy-state.txt` contained the ASCII board plus structured JSON, so the telemetry pipeline clearly works in the compiled build.
-- Per the latest instructions I relaunched through `npx tsx src/index.tsx` (PID 48520), navigated via *Let's Play → Chess vs AI*, switched to text mode with `{TAB}`, and attempted to play `e4`.
-- In this dev/tsx build the moment chess loads the state file collapses to the bare placeholder (`CURRENT SCREEN: Playing: chess`) and never updates again—timestamps stay frozen at 1765789989498 regardless of how many moves are submitted.
-- Because neither the file logger nor any other observable channel (`stdout.txt`, `game_output.txt`, or WebSocket queries) exposes the board/FEN while running in tsx mode, the requested game cannot be reviewed or graded even though the control pattern was followed exactly.
+- Rebuilt once more, launched with `npm start` (PID 26064), and navigated through *Let's Play → Chess vs AI* via the documented Navigate → Poll → Enter pattern.
+- Entered text mode (`{TAB}`), played `e4` followed by `{ENTER}`, and immediately saw `STATUS: AI played e6` plus the correct French Defence FEN (`rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2`). A second move `d4` → `{ENTER}` triggered `AI played d5`, confirming that both player and AI moves now log automatically without the hint/new hack.
+- The only remaining UI quirk is the initial placeholder: upon entering Chess the state file still shows “(Game or Sub-screen Active)” until the first move lands.
+- Text-mode UX feels smoother: the status line shows each move, and errors are surfaced inline (though sending an `N…` SAN without text-mode focus can still hit the global “New game” shortcut).
+- WebSocket requests `client.query('gameState')` and `client.query('gamestate')` continue to time out, leaving file logging as the sole telemetry source.
 
 ## Key Findings
-1. **Chess telemetry is build-dependent.** The compiled `dist` build emits the full chess snapshot, but the `npx tsx src/index.tsx` workflow drops back to the placeholder view as soon as chess launches, leaving most dev/test users blind.
-2. **WebSocket queries remain unusable as a fallback.** `client.query('gameState')` consistently times out because the query router still only serves `stats` and `history`, so there is no alternative data path when file logging stalls.
-3. **Move submission offers zero feedback in tsx mode.** Sending `{TAB}` followed by `e4{ENTER}` produces no timestamp change, no history entry, and no AI reply, so there is no evidence that the move was received or that the AI responded.
+1. **Move logging is now reliable.** Every move (human or AI) writes the full board, FEN, history, and status immediately after `{ENTER}`.
+2. **Initial snapshot still missing.** The chess screen doesn’t emit a log until the first move, so observers remain blind between the menu and move one.
+3. **WebSocket gamestate query remains broken.** Both camelCase and lowercase queries still return “Query timeout,” so there’s no network fallback despite the router changes.
 
 ## Areas for Improvement
-- **Restore structured chess logging in dev mode.** Ensure the Ink effect that calls `logGameState('Playing Chess', …)` executes identically in both tsx and dist entry points so the faster developer loop still surfaces the board/FEN payload.
-- **Expose `gameState` over WebSocket.** Extend the query handler registry to return `stateManager.get()` so agents can fall back to `query('gameState')` whenever the state file fails to update.
-- **Add diagnostic snapshots.** Provide a lightweight CLI (e.g., `node dist/agent/cli.js snapshot chess`) that dumps the current board and move history to disk, enabling post-mortem reviews even when real-time logging stalls.
+- **Emit a snapshot when the chess screen loads.** Mirror the first-move logging so `likubuddy-state.txt` shows the initial board as soon as Chess mounts.
+- **Finish wiring the gamestate query.** Ensure the router responds to `gameState`/`gamestate` so agents can poll the board without relying on the file.
+- **Guard hotkeys while typing.** Ignore global shortcuts like `n`/`N` when the text-input field has focus to prevent accidental resets while entering SAN moves.
