@@ -20,6 +20,7 @@ import { ChessAI } from '../../chess/ChessAI.js';
 import { ChessEvaluator } from '../../chess/ChessEvaluator.js';
 import { logGameState } from '../../core/GameStateLogger.js';
 import { createChessState } from '../../websocket/state.js';
+import { detectAgent, playIntroVideo, notifyIntroPlaying } from '../../intro/IntroPlayer.js';
 import {
   AIDifficulty,
   ChessState,
@@ -520,6 +521,17 @@ const Chess: React.FC<ChessProps> = ({
       return () => clearTimeout(t);
     }
   }, [mode, engine, playerColor, thinking, makeAIMove, gameState]);
+
+  // Play AI intro video on mount (if AI agent is detected)
+  useEffect(() => {
+    const agent = detectAgent();
+    if (agent) {
+      const { pid, duration } = playIntroVideo(agent);
+      if (pid || duration > 0) {
+        notifyIntroPlaying(agent, pid, duration);
+      }
+    }
+  }, []); // Empty deps = run once on mount
 
   // Log initial state immediately when chess screen loads (like TicTacToe does)
   useEffect(() => {
