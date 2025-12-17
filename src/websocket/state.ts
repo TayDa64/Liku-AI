@@ -175,6 +175,10 @@ export interface ChessGameState {
   // Input mode: 'cursor' (arrow keys) or 'text' (SAN/UCI notation)
   // AI should use text mode for faster, more reliable move entry
   inputMode?: 'cursor' | 'text';
+  
+  // Current cursor position in algebraic notation (e.g., 'e2')
+  // Only relevant when inputMode is 'cursor'
+  cursorSquare?: string;
 }
 
 export type StructuredGameData = DinoGameState | SnakeGameState | TicTacToeGameState | ChessGameState | MenuState;
@@ -708,12 +712,13 @@ export function createChessState(params: {
   difficulty?: string;
   opening?: string;
   inputMode?: 'cursor' | 'text';
+  cursorSquare?: string;
 }): ChessGameState {
   const {
     fen, turn, moveNumber, isPlayerTurn, playerColor,
     legalMoves, isCheck, isCheckmate, isStalemate, isDraw, drawReason,
     lastMove, capturedPieces, evaluation, history, difficulty, opening,
-    inputMode
+    inputMode, cursorSquare
   } = params;
 
   // Parse FEN to create board array
@@ -816,5 +821,6 @@ export function createChessState(params: {
     difficulty,
     opening,
     inputMode,
+    cursorSquare,
   };
 }

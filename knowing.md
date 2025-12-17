@@ -1,7 +1,7 @@
 # LikuBuddy Knowledge Base
 
 > **Complete documentation of all implementations, commands, APIs, and interaction patterns**  
-> **Version:** 2.0.0-alpha.1 | **Last Updated:** 2025-12-14
+> **Version:** 2.4.0-alpha.1 | **Last Updated:** 2025-12-16
 
 ---
 
@@ -10,21 +10,23 @@
 1. [Project Overview](#project-overview)
 2. [Quick Start Commands](#quick-start-commands)
 3. [Architecture Overview](#architecture-overview)
-4. [CLI Commands](#cli-commands)
-5. [NPM Scripts](#npm-scripts)
-6. [WebSocket Protocol](#websocket-protocol)
-7. [Chess Engine](#chess-engine)
-8. [Training Module](#training-module)
-9. [AI Agent Interface](#ai-agent-interface)
-10. [AutoPlayer System](#autoplayer-system)
-11. [Liku Learn Research Engine](#liku-learn-research-engine)
-12. [PowerShell Scripts](#powershell-scripts)
-13. [JavaScript/Node Scripts](#javascriptnode-scripts)
-14. [Database Schema](#database-schema)
-15. [Game Implementations](#game-implementations)
-16. [Configuration](#configuration)
-17. [Environment Variables](#environment-variables)
-18. [Troubleshooting](#troubleshooting)
+4. [AI Intro Video System](#ai-intro-video-system)
+5. [CLI Commands](#cli-commands)
+6. [NPM Scripts](#npm-scripts)
+7. [WebSocket Protocol](#websocket-protocol)
+8. [Chess Engine](#chess-engine)
+9. [Training Module](#training-module)
+10. [AI Agent Interface](#ai-agent-interface)
+11. [AutoPlayer System](#autoplayer-system)
+12. [Liku Learn Research Engine](#liku-learn-research-engine)
+13. [PowerShell Scripts](#powershell-scripts)
+14. [JavaScript/Node Scripts](#javascriptnode-scripts)
+15. [Database Schema](#database-schema)
+16. [Game Implementations](#game-implementations)
+17. [Configuration](#configuration)
+18. [Environment Variables](#environment-variables)
+19. [Troubleshooting](#troubleshooting)
+20. [Known Issues & Areas for Improvement](#known-issues--areas-for-improvement)
 
 ---
 
@@ -38,6 +40,7 @@ LikuBuddy is a **multi-game AI platform** built as a terminal UI (TUI) applicati
 - **Training Module**: Session recording, ML export, analytics
 - **Research Engine**: Web search, math processing, code search
 - **Cross-Platform**: Windows (PowerShell), macOS (AppleScript), Linux (xdotool)
+- **AI Intro System**: Video intros for AI agents (Claude, Gemini, ChatGPT, Grok)
 
 ### Tech Stack
 
@@ -49,7 +52,7 @@ LikuBuddy is a **multi-game AI platform** built as a terminal UI (TUI) applicati
 | Database | SQLite (better-sqlite3) |
 | WebSocket | ws 8.18.0 |
 | Chess | chess.js 1.4.0 |
-| AI | Google Gemini 1.5 API |
+| AI | Google Gemini 2.5 Flash API |
 | Styling | chalk (ANSI colors) |
 | Testing | vitest (476+ tests) |
 
@@ -142,6 +145,14 @@ LikuBuddy/
 │   │       ├── LanguageEngine.ts
 │   │       └── CodebaseEngine.ts
 │   │
+│   ├── intro/                 # AI intro video system
+│   │   ├── IntroPlayer.ts     # Video playback & agent detection
+│   │   └── media/             # Video assets
+│   │       ├── Opus45.mp4
+│   │       ├── gemini3.mp4
+│   │       ├── chatgpt51.mp4
+│   │       └── grok41.mp4
+│   │
 │   ├── services/
 │   │   └── DatabaseService.ts # SQLite singleton
 │   │
@@ -164,6 +175,188 @@ LikuBuddy/
 │   └── test-ai-vs-ai.js       # Cross-chat testing
 │
 └── *.ps1                      # PowerShell automation
+```
+
+---
+
+## AI Intro Video System
+
+### Overview
+
+LikuBuddy plays personalized intro videos when AI agents launch Chess, creating a cinematic experience. Each of the four supported AI models has a unique 7-second MP4 video.
+
+### Supported Agents
+
+| Agent ID | Model | Video File | Tagline |
+|----------|-------|------------|---------|
+| `opus-4.5` | Claude Opus 4.5 | `Opus45.mp4` | "Anthropic's Reasoning Engine Enters the Arena" |
+| `gemini-3` | Gemini 3 | `gemini3.mp4` | "Google's Multimodal Mind Awakens" |
+| `chatgpt-5.1` | ChatGPT 5.1 | `chatgpt51.mp4` | "OpenAI's Neural Champion Steps Forward" |
+| `grok-4.1` | Grok 4.1 | `grok41.mp4` | "xAI's Cosmic Challenger" |
+
+### Agent Alias System (NEW)
+
+The intro system now supports **flexible agent identification** with aliases and fuzzy matching.
+All inputs are case-insensitive.
+
+| Canonical ID | Supported Aliases |
+|-------------|-------------------|
+| `opus-4.5` | `claude`, `anthropic`, `opus`, `claude-opus-4.5`, `claude-4.5`, `sonnet`, `haiku` |
+| `gemini-3` | `gemini`, `google`, `bard`, `gemini-2.5-flash`, `gemini-2.0-flash`, `gemini-flash`, `gemini-pro` |
+| `chatgpt-5.1` | `chatgpt`, `openai`, `gpt-5`, `gpt-4o`, `gpt-4`, `gpt`, `o1`, `o1-preview`, `o1-mini` |
+| `grok-4.1` | `grok`, `xai`, `x-ai`, `x.ai`, `grok-4`, `grok-3` |
+
+**Pattern Matching**: The system also uses regex patterns, so even partial matches like "I am Claude" will resolve to opus-4.5.
+
+### Architecture
+
+```
+src/intro/
+├── IntroPlayer.ts         # Core intro system
+│   ├── AGENTS             # Canonical agent definitions
+│   ├── AGENT_ALIASES      # Alias → canonical ID mapping
+│   ├── AGENT_PATTERNS     # Regex patterns for fuzzy matching
+│   ├── resolveAgentId()   # Alias resolution function
+│   ├── detectAgent()      # 3-tier agent detection with alias support
+│   ├── playIntroVideo()   # Video launch + auto-close
+│   ├── notifyIntroPlaying() # State file notification
+│   └── maybePlayIntro()   # Convenience wrapper
+└── media/                 # Video assets (4 MP4 files)
+    ├── Opus45.mp4
+    ├── gemini3.mp4
+    ├── chatgpt51.mp4
+    └── grok41.mp4
+```
+
+### Agent Detection (3-Tier Priority with Alias Resolution)
+
+The system detects which AI agent is playing using three methods in priority order.
+**All inputs are resolved through the alias system** for maximum flexibility.
+
+1. **Environment Variable** (highest priority)
+   ```bash
+   LIKU_AI_PLAYER=gemini npm start      # Works! Resolves to gemini-3
+   LIKU_AI_PLAYER=claude npm start      # Works! Resolves to opus-4.5
+   ```
+
+2. **CLI Argument**
+   ```bash
+   npm start -- --agent=openai          # Works! Resolves to chatgpt-5.1
+   npm start -- --agent=grok            # Works! Resolves to grok-4.1
+   ```
+
+3. **Signal File** (required for cross-terminal scenarios)
+   ```
+   ~/.liku-ai/current-agent.txt
+   ```
+   Contents: Any supported alias (e.g., `gemini`, `google`, `gemini-2.5-flash`)
+
+### Signal File Pattern (Critical Discovery)
+
+**Problem**: When an AI agent (like Gemini CLI) runs in Terminal A but the game runs in Terminal B, environment variables don't transfer between terminals.
+
+**Solution**: The AI writes its identity to a signal file before navigating to Chess:
+
+```powershell
+# AI must run this BEFORE navigating to Chess
+# Any of these work (case-insensitive):
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.liku-ai" | Out-Null
+Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "gemini"
+# OR: "google", "gemini-2.5-flash", "bard", "GEMINI-FLASH", etc.
+```
+
+The Chess component reads this file on mount and plays the appropriate intro.
+
+### Video Playback Implementation
+
+**Key Finding**: Node.js `child_process` requires specific patterns for Windows video playback:
+
+```typescript
+// Launch video - MUST use exec() with Start-Process
+exec(`powershell -Command "Start-Process '${videoPath}'"`, ...);
+
+// Auto-close after video - MUST use detached spawn()
+spawn('cmd', ['/c', `timeout /t ${seconds} /nobreak >nul && powershell -Command "Stop-Process -Name 'ApplicationFrameHost'..."`], {
+  detached: true,
+  stdio: 'ignore',
+  windowsHide: true,
+});
+```
+
+**Why This Pattern?**
+- `exec()` alone: Works for launching but can't reliably schedule close
+- `setTimeout()`: Node process may exit before timer fires
+- Non-detached spawn: Blocks or fails when video player modal is open
+- Detached spawn with windowsHide: Runs independently, closes video silently
+
+### Integration Points
+
+**Chess.tsx** triggers intro on mount:
+
+```typescript
+useEffect(() => {
+  const agent = detectAgent();
+  if (agent) {
+    playIntroVideo(agent);
+    notifyIntroPlaying(agent);
+  }
+}, []); // Empty deps = runs once on mount
+```
+
+### Test Script
+
+```bash
+# Test specific agent intro (aliases work!)
+npx tsx scripts/test-intro.ts gemini       # Resolves to gemini-3
+npx tsx scripts/test-intro.ts claude       # Resolves to opus-4.5
+npx tsx scripts/test-intro.ts openai       # Resolves to chatgpt-5.1
+npx tsx scripts/test-intro.ts grok         # Resolves to grok-4.1
+```
+
+### Timing Configuration
+
+All videos use 10-second auto-close (7s video + 3s buffer for player startup).
+
+```typescript
+const INTRO_VIDEOS: Record<string, IntroConfig> = {
+  'opus-4.5':    { file: 'Opus45.mp4', duration: 10000 },
+  'gemini-3':    { file: 'gemini3.mp4', duration: 10000 },
+  'chatgpt-5.1': { file: 'chatgpt51.mp4', duration: 10000 },
+  'grok-4.1':    { file: 'grok41.mp4', duration: 10000 },
+};
+```
+
+### State File Notification
+
+During intro playback, `likubuddy-state.txt` shows:
+
+```
+CURRENT SCREEN: Intro
+STATUS: Playing
+INTRO: gemini-3
+---
+PID: 12345
+TIMESTAMP: 1734321600000
+```
+
+### GEMINI.md Instructions
+
+AI agents following GEMINI.md are instructed to:
+
+1. Create the signal file with their agent ID (any alias works)
+2. Navigate to Chess
+3. The intro plays automatically
+
+```markdown
+## AI Intro Video (Required for Chess)
+
+Before playing Chess, register your AI identity:
+
+Agent IDs: `opus-4.5` | `gemini-3` | `chatgpt-5.1` | `grok-4.1`
+
+**Step 0 - Register Identity:**
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.liku-ai" | Out-Null
+Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "YOUR_AGENT_ID"
 ```
 
 ---
@@ -1000,7 +1193,9 @@ db.updateSetting('theme', 'cyberpunk');
 - **AI**: ChessAI with configurable difficulty
 - **UI**: Chalk-based single-string row rendering for alignment
 - **Pieces**: Unicode symbols (♔♕♖♗♘♙♚♛♜♝♞♟)
-- **Features**: Move history, captured pieces, evaluation bar
+- **Colors**: Blue for white pieces, Red for black pieces (consistent across all backgrounds)
+- **Features**: Move history, captured pieces, evaluation bar, AI intro videos
+- **Intro Integration**: Plays personalized video when AI agent launches Chess
 
 ### Snake (Snake.tsx)
 
@@ -1086,6 +1281,7 @@ interface RecorderConfig {
 | `GOOGLE_AI_API_KEY` | Alternative Gemini key | For AI features |
 | `WOLFRAM_APP_ID` | Wolfram Alpha API | For math engine |
 | `LIKU_WS_PORT` | Custom WebSocket port | Optional |
+| `LIKU_AI_PLAYER` | AI agent identifier for intro videos | Optional |
 | `NODE_ENV` | Environment mode | Optional |
 
 ---
@@ -1138,6 +1334,22 @@ sudo apt install xdotool
 npm run test -- --reporter=verbose
 ```
 
+**AI intro not playing:**
+- **Most common**: Signal file not created before navigating to Chess
+- Check signal file exists: `Get-Content "$env:USERPROFILE\.liku-ai\current-agent.txt"`
+- Verify agent ID is valid: `opus-4.5`, `gemini-3`, `chatgpt-5.1`, or `grok-4.1`
+- Ensure video files exist in `src/intro/media/`
+- Check Windows Media Player is not blocked
+
+**AI intro video won't close:**
+- Video may have crashed or closed early
+- Manually close with: `Stop-Process -Name "ApplicationFrameHost" -ErrorAction SilentlyContinue`
+- Check if multiple media player instances are running
+
+**Chess piece colors wrong:**
+- **Fixed in v2.4.0**: Black pieces now consistently use `chalk.red` regardless of square background
+- Previously black pieces appeared purple/faded on certain squares due to color blending
+
 ### Debug Mode
 
 ```bash
@@ -1160,11 +1372,77 @@ npm run autoplay -- --verbose --dry-run
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 2.4.0 | Q1 2026 | (Planned) Chess optimization with chessops/stockfish.wasm |
+| 2.5.0 | Q1 2026 | (Planned) Chess optimization with chessops/stockfish.wasm |
+| 2.4.0-alpha.1 | 2025-12-16 | AI intro video system, chess piece color fix, signal file pattern |
 | 2.3.1 | 2025-12-14 | **CRITICAL FIX**: Fixed evaluator corrupting chess state; self-play training script added |
 | 2.3.0 | 2025-12-14 | Benchmark suite, search fixes, performance profiling |
 | 2.0.0-alpha.1 | 2025-01-17 | Chess engine, WebSocket API, Training module |
 | 1.0.0 | 2024-11-24 | Initial release with Snake, TicTacToe, DinoRun |
+
+---
+
+## Known Issues & Areas for Improvement
+
+### Current Limitations
+
+1. **Cross-Terminal Agent Detection**
+   - Environment variables don't transfer between terminals
+   - Signal file approach works but requires AI to explicitly write file
+   - No automatic cleanup of stale signal files
+
+2. **Video Player Dependency**
+   - Relies on Windows Media Player (`ApplicationFrameHost`)
+   - No fallback for systems without default media player
+   - macOS/Linux not yet implemented for intro videos
+
+3. **State File Logging for Chess**
+   - `likubuddy-state.txt` was freezing when Chess launches (addressed with intro notification)
+   - Full chess state (FEN, moves, evaluation) not yet written to state file
+
+4. **Documentation Conflicts**
+   - GEMINI.md had conflicting instructions about chaining navigation keys with ENTER
+   - Now standardized to "Navigate → Poll → Confirm" pattern
+   - Exception: Text mode chess moves (`e4{ENTER}` can be chained)
+
+### Areas for Improvement
+
+1. **Intro Video System**
+   - Add support for macOS (use `open` command) and Linux (use `xdg-open`)
+   - Implement video preloading to reduce startup delay
+   - Add configurable intro skip option for returning players
+   - Consider WebSocket notification instead of state file for intro status
+
+2. **Chess Game**
+   - Write full FEN and legal moves to state file for AI agents
+   - Add real-time evaluation updates to state file
+   - Consider move animation or highlighting
+
+3. **Signal File Management**
+   - Auto-expire signal files after N minutes
+   - Add heartbeat/ping to confirm agent is still active
+   - Consider using WebSocket for agent registration instead
+
+4. **Testing**
+   - Add integration tests for intro video system
+   - Test cross-terminal scenarios with multiple AI agents
+   - Add visual regression tests for chess piece rendering
+
+### Key Findings from Development
+
+1. **Node.js + Windows Video Playback**
+   - `exec()` works for launching but timer-based close fails
+   - `spawn()` with `detached: true` and `windowsHide: true` is required for background tasks
+   - `Start-Process` PowerShell command avoids "open with" dialog
+
+2. **Chalk Terminal Colors**
+   - Color blending with backgrounds can produce unexpected results
+   - Using explicit `chalk.red` (not `chalk.redBright`) provides consistent appearance
+   - Single-string row rendering (building entire row as one string) prevents alignment issues
+
+3. **AI Agent Terminal Isolation**
+   - AI agents (Gemini CLI, etc.) run in isolated terminal environments
+   - Environment variables set by AI don't affect already-running processes
+   - File-based communication is more reliable for cross-process signaling
 
 ---
 

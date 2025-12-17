@@ -11,7 +11,7 @@
  * - AI-readable state logging with FEN notation
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Box, Text, useInput, useApp } from 'ink';
 import TextInput from 'ink-text-input';
 import chalk from 'chalk';
@@ -407,6 +407,16 @@ const Chess: React.FC<ChessProps> = ({
   const [cursorState, setCursorState] = useState<CursorState>('selecting');
   const [legalTargets, setLegalTargets] = useState<Set<string>>(new Set());
 
+  // Refs for immediate cursor tracking (prevents rapid key presses from being batched)
+  // When multiple arrow keys arrive quickly (e.g., {DOWN}{DOWN}{DOWN}), React batches
+  // state updates. Using refs ensures each key press reads the latest position.
+  const cursorRowRef = useRef(cursorRow);
+  const cursorColRef = useRef(cursorCol);
+  
+  // Keep refs in sync with state
+  useEffect(() => { cursorRowRef.current = cursorRow; }, [cursorRow]);
+  useEffect(() => { cursorColRef.current = cursorCol; }, [cursorCol]);
+
   // Text input
   const [moveInput, setMoveInput] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -447,13 +457,34 @@ const Chess: React.FC<ChessProps> = ({
       visualBoard += '    a   b   c   d   e   f   g   h\n';
 
       const turnStr = currentState.turn === 'w' ? 'White' : 'Black';
-      let status = customStatus || `${turnStr} to move (Move #${currentState.moveNumber})`;
+      const modeStr = inputMode.toUpperCase(); // CURSOR or TEXT
+      const turnIndicator = isPlayerTurn ? '>>> YOUR TURN <<<' : '(AI thinking...)';
+      
+      let status = customStatus || `${turnStr} to move ${turnIndicator}`;
       if (currentState.isCheckmate) status = `CHECKMATE! ${turnStr} loses.`;
       else if (currentState.isStalemate) status = 'STALEMATE - Draw';
       else if (currentState.isDraw) status = `DRAW: ${currentState.drawReason}`;
       else if (currentState.isCheck) status += ' - CHECK!';
+      
+      // Format captured pieces for display
+      const whiteCaptured = currentState.capturedPieces.white.join(' ') || 'none';
+      const blackCaptured = currentState.capturedPieces.black.join(' ') || 'none';
+      
+      // Convert cursor position to algebraic notation (e.g., e2)
+      const files = 'abcdefgh';
+      const cursorSquare = `${files[cursorCol]}${8 - cursorRow}`;
+      
+      // Add key info header between STATUS and VISUAL STATE
+      // Include cursor position when in cursor mode for AI navigation
+      const cursorInfo = inputMode === 'cursor' ? ` | CURSOR: ${cursorSquare}` : '';
+      const keyInfo = `MOVE: ${currentState.moveNumber} | MODE: ${modeStr}${cursorInfo} | EVAL: ${currentEval > 0 ? '+' : ''}${currentEval}\nCAPTURED BY WHITE: ${whiteCaptured} | BY BLACK: ${blackCaptured}`;
+      
+      // Prepend key info to visual board
+      const enhancedVisual = keyInfo + '\n\n' + visualBoard;
 
-      const controls = 'Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit';
+      const controls = inputMode === 'cursor' 
+        ? 'Arrow keys: move cursor | Enter: select/move | Tab: text mode | H: hint | U: undo | Esc: exit'
+        : 'Type move (e4, Nf3, O-O) + Enter | Tab: cursor mode | Commands: hint, undo, flip, new, resign';
 
       const structuredState = createChessState({
         fen: currentState.fen,
@@ -480,9 +511,10 @@ const Chess: React.FC<ChessProps> = ({
         difficulty,
         opening: currentState.lastMove?.san ? undefined : 'Starting position',
         inputMode: inputMode, // Include control mode so AI knows to use text or cursor
+        cursorSquare: inputMode === 'cursor' ? cursorSquare : undefined,
       });
 
-      logGameState('Playing Chess', status, visualBoard, controls, structuredState);
+      logGameState('Playing Chess', status, enhancedVisual, controls, structuredState);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       logGameState('Playing Chess (Error)', `Error: ${errorMessage}`, 'Board unavailable', 'Esc: exit');
@@ -581,6 +613,7 @@ const Chess: React.FC<ChessProps> = ({
       difficulty,
       opening: 'Starting position',
       inputMode: 'cursor', // Default on load
+      cursorSquare: 'e2', // Default cursor position on load
     });
 
     logGameState('Playing Chess', status, visualBoard, controls, structuredState);
@@ -659,6 +692,8 @@ const Chess: React.FC<ChessProps> = ({
         history: gameState.history,
         difficulty,
         opening: gameState.lastMove?.san ? undefined : 'Starting position',
+        inputMode: inputMode,
+        cursorSquare: inputMode === 'cursor' ? coordsToSquare(cursorRow, cursorCol) : undefined,
       });
 
       // Log to file and broadcast via WebSocket
@@ -675,7 +710,7 @@ const Chess: React.FC<ChessProps> = ({
       // Also log to console for developer visibility
       // console.error('Chess state logging error:', err);
     }
-  }, [gameState, evaluation, thinking, engine, playerColor, difficulty]);
+  }, [gameState, evaluation, thinking, engine, playerColor, difficulty, inputMode, cursorRow, cursorCol]);
   // ==========================================================================
 
   // Cursor selection
@@ -742,32 +777,7 @@ const Chess: React.FC<ChessProps> = ({
     }
   }, [cursorRow, cursorCol, cursorState, selectedSquare, legalTargets, engine, playerColor, mode, getLegalTargets, updateState, logChessState]);
 
-  // Text submission
-  const handleTextSubmit = useCallback((input: string) => {
-    const m = input.trim();
-    if (!m) return;
-    setError(null);
-    setHint(null);
-    setSuccessMsg(null);
-
-    if (mode === 'ai' && engine.turn() !== playerColor) {
-      setError("Not your turn!");
-      setMoveInput('');
-      return;
-    }
-
-    if (engine.move(m)) {
-      setMoveInput('');
-      setSuccessMsg(`✓ Move: ${m}`);
-      updateState();
-      // Log state immediately after player move
-      setTimeout(() => logChessState(`Player played ${m}`), 50);
-    } else {
-      setError(`Invalid: ${m}`);
-    }
-  }, [engine, mode, playerColor, updateState, logChessState]);
-
-  // Undo
+  // Undo - MUST be defined before handleTextSubmit
   const handleUndo = useCallback(() => {
     if (mode === 'ai') { engine.undo(); engine.undo(); }
     else engine.undo();
@@ -781,7 +791,7 @@ const Chess: React.FC<ChessProps> = ({
     setTimeout(() => logChessState('After undo'), 50);
   }, [engine, mode, updateState, logChessState]);
 
-  // Hint
+  // Hint - MUST be defined before handleTextSubmit
   const handleHint = useCallback(async () => {
     if (engine.isGameOver() || thinking) return;
     setThinking(true);
@@ -792,7 +802,7 @@ const Chess: React.FC<ChessProps> = ({
     finally { setThinking(false); }
   }, [engine, ai, thinking]);
 
-  // New game
+  // New game - MUST be defined before handleTextSubmit
   const handleNew = useCallback(() => {
     engine.reset();
     setSelectedSquare(null);
@@ -800,6 +810,9 @@ const Chess: React.FC<ChessProps> = ({
     setCursorState('selecting');
     setCursorRow(6);
     setCursorCol(4);
+    // Also reset refs for rapid key tracking
+    cursorRowRef.current = 6;
+    cursorColRef.current = 4;
     setSuccessMsg('New game started');
     updateState();
     setHint(null);
@@ -807,6 +820,62 @@ const Chess: React.FC<ChessProps> = ({
     // Log state for new game
     setTimeout(() => logChessState('New game'), 50);
   }, [engine, updateState, logChessState]);
+
+  // Text submission - supports both moves AND text commands (hint, undo, etc.)
+  const handleTextSubmit = useCallback((input: string) => {
+    const m = input.trim();
+    if (!m) return;
+    setError(null);
+    setHint(null);
+    setSuccessMsg(null);
+
+    // Handle special text commands (hint, undo, etc.) in text mode
+    const lowerM = m.toLowerCase();
+    if (lowerM === 'hint' || lowerM === '?') {
+      setMoveInput('');  // Clear immediately
+      handleHint();
+      return;
+    }
+    if (lowerM === 'undo') {
+      setMoveInput('');  // Clear immediately
+      handleUndo();
+      return;
+    }
+    if (lowerM === 'flip') {
+      setMoveInput('');  // Clear immediately
+      setFlipped(f => !f);
+      return;
+    }
+    if (lowerM === 'new') {
+      setMoveInput('');  // Clear immediately
+      handleNew();
+      return;
+    }
+    if (lowerM === 'resign') {
+      setMoveInput('');  // Clear immediately
+      if (!engine.isGameOver()) { 
+        setError('You resigned!'); 
+      }
+      return;
+    }
+
+    if (mode === 'ai' && engine.turn() !== playerColor) {
+      setError("Not your turn!");
+      setMoveInput('');  // Clear immediately
+      return;
+    }
+
+    if (engine.move(m)) {
+      setMoveInput('');
+      setSuccessMsg(`✓ Move: ${m}`);
+      updateState();
+      // Log state immediately after player move
+      setTimeout(() => logChessState(`Player played ${m}`), 50);
+    } else {
+      setError(`Invalid: ${m}`);
+      setMoveInput('');  // CRITICAL: Clear invalid move immediately to save AI tokens
+    }
+  }, [engine, mode, playerColor, updateState, logChessState, handleHint, handleUndo, handleNew]);
 
   // Input handler
   useInput((input, key) => {
@@ -840,10 +909,30 @@ const Chess: React.FC<ChessProps> = ({
 
     if (inputMode === 'cursor') {
       const dir = flipped ? -1 : 1;
-      if (key.upArrow) setCursorRow(r => Math.max(0, Math.min(7, r - dir)));
-      if (key.downArrow) setCursorRow(r => Math.max(0, Math.min(7, r + dir)));
-      if (key.leftArrow) setCursorCol(c => Math.max(0, Math.min(7, c - dir)));
-      if (key.rightArrow) setCursorCol(c => Math.max(0, Math.min(7, c + dir)));
+      // Use refs for immediate position tracking to handle rapid key presses
+      // When AI sends multiple arrows quickly (e.g., {DOWN}{DOWN}{DOWN}),
+      // React batches state updates. Reading from ref ensures each key press
+      // uses the most recent position, not the stale state from batch start.
+      if (key.upArrow) {
+        const newRow = Math.max(0, Math.min(7, cursorRowRef.current - dir));
+        cursorRowRef.current = newRow;
+        setCursorRow(newRow);
+      }
+      if (key.downArrow) {
+        const newRow = Math.max(0, Math.min(7, cursorRowRef.current + dir));
+        cursorRowRef.current = newRow;
+        setCursorRow(newRow);
+      }
+      if (key.leftArrow) {
+        const newCol = Math.max(0, Math.min(7, cursorColRef.current - dir));
+        cursorColRef.current = newCol;
+        setCursorCol(newCol);
+      }
+      if (key.rightArrow) {
+        const newCol = Math.max(0, Math.min(7, cursorColRef.current + dir));
+        cursorColRef.current = newCol;
+        setCursorCol(newCol);
+      }
       if (key.return) handleCursorAction();
     }
   });

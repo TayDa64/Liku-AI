@@ -300,7 +300,13 @@ LikuBuddy.code-workspace   # VS Code workspace file (optional)
 README.md                           # Getting started guide
 GENERATIVE_GAME_PLATFORM.md        # Architecture deep-dive
 IMPLEMENTATION_SUMMARY.md           # v2.0 implementation details
-GEMINI.md                           # Extension context for Gemini CLI
+LIKU-CORE.md                        # AI agent core manual (entry point)
+docs/ai/LIKU-CHESS.md               # Chess-specific AI instructions
+docs/ai/LIKU-SNAKE.md               # Snake-specific AI instructions
+docs/ai/LIKU-TICTACTOE.md           # Tic-Tac-Toe AI instructions
+docs/ai/LIKU-DINORUN.md             # Dino Run AI instructions
+docs/ai/LIKU-SETTINGS.md            # Settings & AI Mode instructions
+GEMINI.md                           # (Deprecated) Redirects to LIKU-CORE.md
 PERSISTENCE_AND_COMMANDS_UPDATE.md # Supervisor persistence notes
 SUPERVISOR_PORT_COMPLETE.md        # Supervisor system port documentation
 ```

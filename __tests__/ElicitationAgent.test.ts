@@ -33,7 +33,7 @@ describe('ElicitationAgent', () => {
 
     it('should return model name when configured', () => {
       agent = new ElicitationAgent('test-api-key');
-      expect(agent.getModelName()).toBe('gemini-2.0-flash');
+      expect(agent.getModelName()).toBe('gemini-2.5-flash');
     });
   });
 

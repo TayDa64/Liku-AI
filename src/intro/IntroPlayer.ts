@@ -13,6 +13,12 @@
  *   - Set LIKU_AI_PLAYER=claude-opus-4.5 before launching
  *   - Or pass --agent=claude-opus-4.5 flag
  *   - Intro plays in native player while game loads
+ * 
+ * Supported Agent Aliases (case-insensitive):
+ *   Claude/Anthropic: opus-4.5, claude-opus-4.5, claude-4.5, claude, anthropic, opus, sonnet-4
+ *   Gemini/Google:    gemini-3, gemini-2.5-flash, gemini-flash, gemini, google, bard
+ *   ChatGPT/OpenAI:   chatgpt-5.1, gpt-5.1, gpt-5, chatgpt, openai, gpt-4o, gpt4o
+ *   Grok/xAI:         grok-4.1, grok-4, grok, xai, x-ai
  */
 
 import { spawn, exec, execSync } from 'child_process';
@@ -72,34 +78,213 @@ export const AGENTS: Record<string, AIAgent> = {
   }
 };
 
+// =============================================================================
+// Agent Alias System - Maps various agent identifiers to canonical IDs
+// =============================================================================
+
 /**
- * Detect which AI agent is playing
+ * Comprehensive alias mapping for flexible agent detection.
+ * All keys should be lowercase for case-insensitive matching.
+ */
+const AGENT_ALIASES: Record<string, string> = {
+  // Claude / Anthropic - maps to opus-4.5
+  'opus-4.5': 'opus-4.5',
+  'opus-4': 'opus-4.5',
+  'opus4.5': 'opus-4.5',
+  'opus45': 'opus-4.5',
+  'opus': 'opus-4.5',
+  'claude-opus-4.5': 'opus-4.5',
+  'claude-opus-4': 'opus-4.5',
+  'claude-opus': 'opus-4.5',
+  'claude-4.5': 'opus-4.5',
+  'claude-4': 'opus-4.5',
+  'claude4.5': 'opus-4.5',
+  'claude4': 'opus-4.5',
+  'claude': 'opus-4.5',
+  'anthropic': 'opus-4.5',
+  'sonnet-4': 'opus-4.5',
+  'sonnet4': 'opus-4.5',
+  'sonnet': 'opus-4.5',
+  'haiku': 'opus-4.5',
+  
+  // Gemini / Google - maps to gemini-3
+  'gemini-3': 'gemini-3',
+  'gemini3': 'gemini-3',
+  'gemini-2.5-flash': 'gemini-3',
+  'gemini-2.5': 'gemini-3',
+  'gemini2.5': 'gemini-3',
+  'gemini-2.0-flash': 'gemini-3',
+  'gemini-2.0': 'gemini-3',
+  'gemini2.0': 'gemini-3',
+  'gemini-flash': 'gemini-3',
+  'gemini-pro': 'gemini-3',
+  'gemini': 'gemini-3',
+  'google': 'gemini-3',
+  'google-ai': 'gemini-3',
+  'bard': 'gemini-3',
+  
+  // ChatGPT / OpenAI - maps to chatgpt-5.1
+  'chatgpt-5.1': 'chatgpt-5.1',
+  'chatgpt-5': 'chatgpt-5.1',
+  'chatgpt5.1': 'chatgpt-5.1',
+  'chatgpt5': 'chatgpt-5.1',
+  'chatgpt': 'chatgpt-5.1',
+  'gpt-5.1': 'chatgpt-5.1',
+  'gpt-5': 'chatgpt-5.1',
+  'gpt5.1': 'chatgpt-5.1',
+  'gpt5': 'chatgpt-5.1',
+  'gpt-4o': 'chatgpt-5.1',
+  'gpt4o': 'chatgpt-5.1',
+  'gpt-4': 'chatgpt-5.1',
+  'gpt4': 'chatgpt-5.1',
+  'gpt': 'chatgpt-5.1',
+  'openai': 'chatgpt-5.1',
+  'open-ai': 'chatgpt-5.1',
+  'o1': 'chatgpt-5.1',
+  'o1-preview': 'chatgpt-5.1',
+  'o1-mini': 'chatgpt-5.1',
+  
+  // Grok / xAI - maps to grok-4.1
+  'grok-4.1': 'grok-4.1',
+  'grok-4': 'grok-4.1',
+  'grok4.1': 'grok-4.1',
+  'grok4': 'grok-4.1',
+  'grok-3': 'grok-4.1',
+  'grok3': 'grok-4.1',
+  'grok': 'grok-4.1',
+  'xai': 'grok-4.1',
+  'x-ai': 'grok-4.1',
+  'x.ai': 'grok-4.1',
+  'elon': 'grok-4.1',  // Easter egg
+};
+
+/**
+ * Pattern-based matchers for fuzzy agent detection.
+ * Order matters - more specific patterns should come first.
+ */
+const AGENT_PATTERNS: Array<{ pattern: RegExp; agentId: string }> = [
+  // Claude/Anthropic patterns
+  { pattern: /\bopus\b/i, agentId: 'opus-4.5' },
+  { pattern: /\bclaude\b/i, agentId: 'opus-4.5' },
+  { pattern: /\banthrop/i, agentId: 'opus-4.5' },
+  { pattern: /\bsonnet\b/i, agentId: 'opus-4.5' },
+  
+  // Gemini/Google patterns
+  { pattern: /\bgemini\b/i, agentId: 'gemini-3' },
+  { pattern: /\bgoogle[_-]?ai\b/i, agentId: 'gemini-3' },
+  { pattern: /\bbard\b/i, agentId: 'gemini-3' },
+  
+  // ChatGPT/OpenAI patterns
+  { pattern: /\bchatgpt\b/i, agentId: 'chatgpt-5.1' },
+  { pattern: /\bgpt[_-]?\d/i, agentId: 'chatgpt-5.1' },
+  { pattern: /\bopenai\b/i, agentId: 'chatgpt-5.1' },
+  { pattern: /\bo1[_-]?(preview|mini)?\b/i, agentId: 'chatgpt-5.1' },
+  
+  // Grok/xAI patterns
+  { pattern: /\bgrok\b/i, agentId: 'grok-4.1' },
+  { pattern: /\bx\.?ai\b/i, agentId: 'grok-4.1' },
+];
+
+/**
+ * Resolve an agent identifier to a canonical agent ID.
+ * Supports exact matches, aliases, and fuzzy pattern matching.
+ * 
+ * @param input - The raw agent identifier (case-insensitive)
+ * @returns The canonical agent ID or null if no match
+ */
+export function resolveAgentId(input: string): string | null {
+  if (!input || typeof input !== 'string') return null;
+  
+  // Normalize: trim, lowercase, remove extra whitespace
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, '-');
+  
+  // 1. Direct lookup in canonical AGENTS
+  if (AGENTS[normalized]) {
+    return normalized;
+  }
+  
+  // 2. Alias lookup
+  if (AGENT_ALIASES[normalized]) {
+    return AGENT_ALIASES[normalized];
+  }
+  
+  // 3. Pattern matching for fuzzy detection
+  for (const { pattern, agentId } of AGENT_PATTERNS) {
+    if (pattern.test(input)) {
+      return agentId;
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Get all supported agent aliases for documentation
+ */
+export function getSupportedAliases(): Record<string, string[]> {
+  const result: Record<string, string[]> = {};
+  
+  for (const [alias, canonicalId] of Object.entries(AGENT_ALIASES)) {
+    if (!result[canonicalId]) {
+      result[canonicalId] = [];
+    }
+    result[canonicalId].push(alias);
+  }
+  
+  return result;
+}
+
+/**
+ * Detect which AI agent is playing.
+ * Checks in priority order:
+ *   1. LIKU_AI_PLAYER environment variable
+ *   2. --agent=<id> command line argument
+ *   3. Signal file at ~/.liku-ai/current-agent.txt
+ * 
+ * All inputs are resolved through the alias system for flexible matching.
  */
 export function detectAgent(): AIAgent | null {
-  // Check environment variable first
+  // Helper to resolve and return agent
+  const tryResolve = (input: string | undefined): AIAgent | null => {
+    if (!input) return null;
+    const canonicalId = resolveAgentId(input);
+    if (canonicalId && AGENTS[canonicalId]) {
+      return AGENTS[canonicalId];
+    }
+    return null;
+  };
+
+  // 1. Check environment variable first (highest priority)
   const envAgent = process.env.LIKU_AI_PLAYER;
-  if (envAgent && AGENTS[envAgent]) {
-    return AGENTS[envAgent];
+  const fromEnv = tryResolve(envAgent);
+  if (fromEnv) {
+    console.log(`[Intro] Agent detected from env LIKU_AI_PLAYER="${envAgent}" → ${fromEnv.id}`);
+    return fromEnv;
   }
 
-  // Check command line args
+  // 2. Check command line args
   const agentArg = process.argv.find(arg => arg.startsWith('--agent='));
   if (agentArg) {
-    const agentId = agentArg.split('=')[1];
-    if (AGENTS[agentId]) {
-      return AGENTS[agentId];
+    const agentInput = agentArg.split('=')[1];
+    const fromArg = tryResolve(agentInput);
+    if (fromArg) {
+      console.log(`[Intro] Agent detected from --agent="${agentInput}" → ${fromArg.id}`);
+      return fromArg;
     }
   }
 
-  // Check signal file
+  // 3. Check signal file (for cross-terminal scenarios)
   const homeDir = process.env.HOME || process.env.USERPROFILE || '';
   const signalFile = path.join(homeDir, '.liku-ai', 'current-agent.txt');
   if (existsSync(signalFile)) {
     try {
-      const fs = require('fs');
-      const agentId = fs.readFileSync(signalFile, 'utf-8').trim();
-      if (AGENTS[agentId]) {
-        return AGENTS[agentId];
+      const fileContent = readFileSync(signalFile, 'utf-8').trim();
+      const fromFile = tryResolve(fileContent);
+      if (fromFile) {
+        console.log(`[Intro] Agent detected from signal file "${fileContent}" → ${fromFile.id}`);
+        return fromFile;
+      } else {
+        console.log(`[Intro] Unknown agent in signal file: "${fileContent}"`);
       }
     } catch {
       // Ignore read errors

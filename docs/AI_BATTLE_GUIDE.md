@@ -88,7 +88,7 @@ node scripts/ai-battle.js --verbose
 ## Gemini API Configuration
 
 ### Model Settings
-- **Model**: `gemini-2.0-flash` (fastest, most quota-friendly)
+- **Model**: `gemini-2.5-flash` (latest, recommended)
 - **Temperature**: 0.8 (creative but controlled)
 - **Max Tokens**: 300
 

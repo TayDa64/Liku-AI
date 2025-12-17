@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Box, Text, useInput, useApp, useStdout } from 'ink';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +44,17 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 
 	const [selectedGame, setSelectedGame] = useState<number>(0);
 	const [selectedGameMenuIndex, setSelectedGameMenuIndex] = useState<number>(0);
+	
+	// Refs for immediate selection tracking (prevents rapid key presses from being batched)
+	// When multiple arrow keys arrive quickly (e.g., {DOWN}{DOWN}{DOWN}), React batches
+	// state updates. Using refs ensures each key press reads the latest position.
+	const selectedGameRef = useRef(selectedGame);
+	const selectedGameMenuRef = useRef(selectedGameMenuIndex);
+	
+	// Keep refs in sync with state
+	useEffect(() => { selectedGameRef.current = selectedGame; }, [selectedGame]);
+	useEffect(() => { selectedGameMenuRef.current = selectedGameMenuIndex; }, [selectedGameMenuIndex]);
+	
 	const [activeGame, setActiveGame] = useState<string | null>(null);
 	const [stats, setStats] = useState<PlayerStats | null>(null);
 	const [settings, setSettings] = useState<UserSettings | null>(null);
@@ -133,14 +144,20 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 		const isGameMenu = activeGame === 'games_menu';
 		const items = isGameMenu ? gameMenuItems : mainMenuItems;
 		const setSelection = isGameMenu ? setSelectedGameMenuIndex : setSelectedGame;
-		const currentSelection = isGameMenu ? selectedGameMenuIndex : selectedGame;
+		const selectionRef = isGameMenu ? selectedGameMenuRef : selectedGameRef;
+		// Use ref for reading current value (immediate, not batched)
+		// Use state setter for writing (which will sync to ref via useEffect)
 
 		if (command === 'up') {
-			setSelection(prev => Math.max(0, prev - 1));
+			const newVal = Math.max(0, selectionRef.current - 1);
+			selectionRef.current = newVal; // Update ref immediately for next rapid key
+			setSelection(newVal);
 		} else if (command === 'down') {
-			setSelection(prev => Math.min(items.length - 1, prev + 1));
+			const newVal = Math.min(items.length - 1, selectionRef.current + 1);
+			selectionRef.current = newVal; // Update ref immediately for next rapid key
+			setSelection(newVal);
 		} else if (command === 'enter') {
-			handleAction(items[currentSelection].id);
+			handleAction(items[selectionRef.current].id);
 		} else if (command === 'feed' && !activeGame) {
 			// Direct shortcut for AI
 			handleAction('feed');

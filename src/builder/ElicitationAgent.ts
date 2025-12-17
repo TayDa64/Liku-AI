@@ -127,9 +127,9 @@ export interface ElicitationSession {
 
 // Supported Gemini models with fallback chain
 const GEMINI_MODELS = [
-  'gemini-2.0-flash',           // Latest 2025 model
-  'gemini-1.5-pro',             // Fallback
-  'gemini-1.5-flash',           // Fast fallback
+  'gemini-2.5-flash',           // Latest 2025 model (recommended)
+  'gemini-2.0-flash',           // Fallback
+  'gemini-1.5-pro',             // Legacy fallback
 ] as const;
 
 export class ElicitationAgent {
