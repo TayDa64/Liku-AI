@@ -141,6 +141,15 @@ const GameHub: React.FC<GameHubProps> = ({ ai = false, actionQueue, setActionQue
 	];
 
 	const performAction = (command: string) => {
+		// Don't process menu commands when an actual game (not a menu) is running
+		// Games like chess, snake, etc. handle their own input via commandBridge
+		const isInGame = activeGame && activeGame !== 'games_menu' && activeGame !== 'settings' 
+			&& activeGame !== 'builder' && activeGame !== 'community' && activeGame !== 'liku_os'
+			&& activeGame !== 'liku_learn';
+		if (isInGame) {
+			return; // Let the game component handle the input
+		}
+
 		const isGameMenu = activeGame === 'games_menu';
 		const items = isGameMenu ? gameMenuItems : mainMenuItems;
 		const setSelection = isGameMenu ? setSelectedGameMenuIndex : setSelectedGame;

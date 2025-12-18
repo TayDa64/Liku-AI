@@ -1,14 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { render, useStdin, useApp, useStdout } from 'ink';
 import meow from 'meow';
 import fs from 'node:fs';
 import path from 'node:path';
+import { EventEmitter } from 'node:events';
 import GameHub from './ui/LikuTUI.js';
 import { wsServer } from './websocket/server.js';
 import { setWebSocketEnabled, setFileLoggingEnabled } from './core/GameStateLogger.js';
 
 // State file path for AI visibility
 const STATE_FILE = path.join(process.cwd(), 'likubuddy-state.txt');
+
+// ============================================================
+// WebSocket → React Bridge
+// Allows WebSocket events to be forwarded to React components
+// ============================================================
+export const commandBridge = new EventEmitter();
+commandBridge.setMaxListeners(20);
 
 // ============================================================
 // ANSI Escape Codes for Terminal Control
@@ -169,13 +177,14 @@ const startWebSocketServer = async (): Promise<void> => {
     
     // Setup command handlers
     wsServer.on('key', (key: string, clientId: string) => {
-      // Keys will be handled by the game components via synthetic events
-      // For now, log them - actual handling is done in LikuTUI
+      // Forward key events to React via the command bridge
       logsBuffer.push(`[WS] Key from ${clientId}: ${key}`);
+      commandBridge.emit('key', key);
     });
 
     wsServer.on('action', (action: string, clientId: string) => {
       logsBuffer.push(`[WS] Action from ${clientId}: ${action}`);
+      commandBridge.emit('action', action);
     });
 
     wsServer.on('query', (query: string, clientId: string, callback: (result: unknown) => void) => {
@@ -242,15 +251,40 @@ const App: React.FC<AppProps> = ({ ai = false, wsEnabled = true }) => {
 	const [actionQueue, setActionQueue] = useState<string[]>([]);
 	const [wsReady, setWsReady] = useState(false);
 
+	// Handle WebSocket key events via the command bridge
+	const handleWsKey = useCallback((key: string) => {
+		// Map WebSocket key names to action commands
+		const keyToAction: Record<string, string> = {
+			'up': 'up',
+			'down': 'down',
+			'left': 'left',
+			'right': 'right',
+			'enter': 'enter',
+			'escape': 'escape',
+			'space': 'space',
+			'tab': 'tab',
+		};
+		const action = keyToAction[key.toLowerCase()] || key;
+		setActionQueue(prev => [...prev, action]);
+	}, []);
+
+	const handleWsAction = useCallback((action: string) => {
+		setActionQueue(prev => [...prev, action]);
+	}, []);
+
 	useEffect(() => {
 		// Guard streams (prevents console.log from corrupting TUI)
 		guardStreams();
 
-		// Start WebSocket server
+		// Start WebSocket server and set up command bridge listeners
 		if (wsEnabled) {
 			startWebSocketServer().then(() => {
 				setWsReady(true);
 			});
+
+			// Subscribe to command bridge events
+			commandBridge.on('key', handleWsKey);
+			commandBridge.on('action', handleWsAction);
 		}
 
 		if (ai) {
@@ -267,14 +301,18 @@ const App: React.FC<AppProps> = ({ ai = false, wsEnabled = true }) => {
 			stdin.on('data', handleData);
 			return () => {
 				stdin.off('data', handleData);
+				commandBridge.off('key', handleWsKey);
+				commandBridge.off('action', handleWsAction);
 				restoreStreams();
 			};
 		}
 
 		return () => {
+			commandBridge.off('key', handleWsKey);
+			commandBridge.off('action', handleWsAction);
 			restoreStreams();
 		};
-	}, [ai, exit, stdin, setRawMode, wsEnabled]);
+	}, [ai, exit, stdin, setRawMode, wsEnabled, handleWsKey, handleWsAction]);
 
 	return <GameHub ai={ai} actionQueue={actionQueue} setActionQueue={setActionQueue} />;
 };

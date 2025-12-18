@@ -4,6 +4,8 @@
 
 ## ⚡ TL;DR - Quick Start
 
+### 🪟 Windows (PowerShell)
+
 ```powershell
 # 1. Spawn game in separate window (REQUIRED)
 Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; node dist/index.js"
@@ -15,6 +17,26 @@ Get-Content .\likubuddy-state.txt
 .\send-keys.ps1 -Key "{DOWN}"      # Navigate
 .\send-keys.ps1 -Key "{ENTER}"     # Select
 ```
+
+### 🐧 Linux / macOS / Codespaces (Bash)
+
+```bash
+# 1. Start game in background
+node dist/index.js &
+
+# 2. Read state file
+cat likubuddy-state.txt
+
+# 3. Send keys via WebSocket (cross-platform)
+./send-keys.sh -Key "{DOWN}"       # Navigate
+./send-keys.sh -Key "{ENTER}"      # Select
+
+# Alternative: Direct WebSocket command
+node send-command.js --key down
+node send-command.js --key enter
+```
+
+> **Note for Codespaces/Headless:** The `send-keys.sh` script uses WebSocket instead of GUI keystroke injection, so it works without a display server.
 
 ---
 
@@ -28,11 +50,26 @@ Get-Content .\likubuddy-state.txt
 
 ## 🚀 Starting the Game
 
+### 🪟 Windows
+
 ```powershell
 Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; node dist/index.js"
 ```
 
 This spawns a window titled "LikuBuddy Game Window". All `send-keys.ps1` commands auto-target this window.
+
+### 🐧 Linux / macOS / Codespaces
+
+```bash
+# Option 1: Background process (recommended for AI agents)
+cd /workspaces/Liku-AI  # or your project path
+node dist/index.js &
+
+# Option 2: Separate terminal/tmux session
+tmux new-session -d -s liku 'node dist/index.js'
+```
+
+> **Headless Environments:** The game renders to the terminal but also writes state to `likubuddy-state.txt` and accepts commands via WebSocket (port 3847). No GUI needed!
 
 ---
 
@@ -45,7 +82,13 @@ The file `likubuddy-state.txt` contains real-time game state.
 
 **For Terminal-Only Agents:**
 ```powershell
+# Windows
 Get-Content .\likubuddy-state.txt
+```
+
+```bash
+# Linux/macOS
+cat likubuddy-state.txt
 ```
 
 ### State File Format
@@ -65,22 +108,38 @@ Get-Content .\likubuddy-state.txt
 
 ## 🎮 Sending Commands
 
+### 🪟 Windows (PowerShell)
+
 ```powershell
 .\send-keys.ps1 -Key "<KEY_CODE>"
 ```
 
-**Key Codes:**
-| Key | Code |
-|-----|------|
-| Arrows | `{UP}`, `{DOWN}`, `{LEFT}`, `{RIGHT}` |
-| Enter | `{ENTER}` |
-| Escape | `{ESC}` |
-| Space | ` ` (space character) |
-| Tab | `{TAB}` |
-| Letters | Just the letter: `e`, `f`, `r` |
+### 🐧 Linux / macOS / Codespaces (Bash)
+
+```bash
+# Option 1: Shell script (PowerShell-compatible syntax)
+./send-keys.sh -Key "{DOWN}"
+
+# Option 2: Direct Node.js command
+node send-command.js --key down
+node send-command.js --key enter
+node send-command.js --key "e4"     # Text input (chess moves)
+```
+
+### Key Codes
+
+| Key | PowerShell | Bash/Node |
+|-----|------------|-----------|
+| Arrows | `{UP}`, `{DOWN}`, `{LEFT}`, `{RIGHT}` | `up`, `down`, `left`, `right` |
+| Enter | `{ENTER}` | `enter` |
+| Escape | `{ESC}` | `escape` |
+| Space | ` ` (space character) | `space` |
+| Tab | `{TAB}` | `tab` |
+| Letters | Just the letter: `e`, `f`, `r` | Same: `e`, `f`, `r` |
 
 ### Navigation Pattern (ALWAYS USE THIS)
 
+**Windows:**
 ```powershell
 # Step 1: Navigate
 .\send-keys.ps1 -Key "{DOWN}{DOWN}"
@@ -92,6 +151,19 @@ Get-Content .\likubuddy-state.txt
 .\send-keys.ps1 -Key "{ENTER}"
 ```
 
+**Linux/macOS/Codespaces:**
+```bash
+# Step 1: Navigate
+./send-keys.sh -Key "{DOWN}"
+./send-keys.sh -Key "{DOWN}"
+
+# Step 2: Poll state to verify position
+cat likubuddy-state.txt
+
+# Step 3: Confirm only after verifying
+./send-keys.sh -Key "{ENTER}"
+```
+
 ⚠️ **Rapid key stacking may drop keys** - If `{DOWN}{DOWN}{DOWN}` doesn't move 3 positions, send individual keys with verification between.
 
 ---
@@ -100,12 +172,53 @@ Get-Content .\likubuddy-state.txt
 
 Register your identity before playing Chess to trigger your intro video:
 
+**Windows:**
 ```powershell
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.liku-ai" | Out-Null
 Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude"
 ```
 
-**Supported IDs:** `claude`, `gemini`, `chatgpt`, `grok` (and aliases like `anthropic`, `openai`, etc.)
+**Linux/macOS:**
+```bash
+mkdir -p ~/.liku-ai
+echo "claude" > ~/.liku-ai/current-agent.txt
+```
+
+**Supported IDs:** `claude`, `gemini`, `chatgpt`, `grok` (and aliases like `anthropic`, `openai`, `google`, etc.)
+
+### ⏳ Intro Video Handling (CRITICAL)
+
+When entering Chess, your intro video plays for **10 seconds**. The state file will show:
+
+```
+INTRO: Playing claude intro video for 10s (PID: 12345)
+```
+
+**⚠️ DO NOT send any commands while intro is playing!** Commands during intro will be lost or cause navigation errors.
+
+**Polling Method (Recommended):**
+
+```powershell
+# Windows - Poll until intro finishes
+do {
+    Start-Sleep -Seconds 1
+    $state = Get-Content .\likubuddy-state.txt -Raw
+} while ($state -match "INTRO:")
+# Now safe to send commands
+```
+
+```bash
+# Linux/macOS - Poll until intro finishes
+while grep -q "INTRO:" likubuddy-state.txt 2>/dev/null; do
+    sleep 1
+done
+# Now safe to send commands
+```
+
+**Simple Wait Method:**
+```powershell
+Start-Sleep -Seconds 12  # 10s video + 2s buffer
+```
 
 ---
 
@@ -173,10 +286,43 @@ Based on `CURRENT SCREEN` in state file, read the appropriate doc:
 
 | Problem | Solution |
 |---------|----------|
-| "Could not activate window" | Game not running - restart it |
+| "Could not activate window" (Windows) | Game not running - restart it |
+| "Connection timeout" (Linux/Codespace) | Game not running or WebSocket disabled - start with `node dist/index.js` |
 | Keys not registering | Try single keys with delays |
-| Game crashed | Restart with Start-Process command |
-| Stuck | Send `{ESC}` multiple times |
+| Game crashed | Restart with Start-Process (Win) or `node dist/index.js &` (Linux) |
+| Stuck | Send `{ESC}` / `escape` multiple times |
+
+---
+
+## 🌐 Platform-Specific Notes
+
+### GitHub Codespaces / Headless Linux
+
+The game works fully in headless environments:
+
+1. **No display needed** - State is written to `likubuddy-state.txt`
+2. **WebSocket API** - Commands sent via `send-command.js` or `send-keys.sh`
+3. **Port forwarding** - If running remotely, forward port 3847 for WebSocket
+
+```bash
+# Start game in background
+node dist/index.js &
+
+# Verify it's running
+cat likubuddy-state.txt
+
+# Send commands
+node send-command.js --key down
+node send-command.js --key enter
+```
+
+### Windows vs Linux Command Equivalents
+
+| Windows (PowerShell) | Linux/macOS (Bash) |
+|---------------------|-------------------|
+| `.\send-keys.ps1 -Key "{DOWN}"` | `./send-keys.sh -Key "{DOWN}"` |
+| `Get-Content .\likubuddy-state.txt` | `cat likubuddy-state.txt` |
+| `Start-Process pwsh ...` | `node dist/index.js &` |
 
 ---
 

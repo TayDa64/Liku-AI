@@ -21,6 +21,7 @@ import { ChessEvaluator } from '../../chess/ChessEvaluator.js';
 import { logGameState } from '../../core/GameStateLogger.js';
 import { createChessState } from '../../websocket/state.js';
 import { detectAgent, playIntroVideo, notifyIntroPlaying } from '../../intro/IntroPlayer.js';
+import { commandBridge } from '../../index.js';
 import {
   AIDifficulty,
   ChessState,
@@ -715,9 +716,12 @@ const Chess: React.FC<ChessProps> = ({
 
   // Cursor selection
   const handleCursorAction = useCallback(() => {
-    const sq = coordsToSquare(cursorRow, cursorCol);
+    // Use refs for cursor position to avoid stale closures with WebSocket events
+    const row = cursorRowRef.current;
+    const col = cursorColRef.current;
+    const sq = coordsToSquare(row, col);
     const board = parseFen(engine.fen());
-    const piece = board[cursorRow][cursorCol];
+    const piece = board[row][col];
 
     if (cursorState === 'selecting') {
       if (!piece) { setError('Empty square'); return; }
@@ -775,7 +779,7 @@ const Chess: React.FC<ChessProps> = ({
         setError('Move failed');
       }
     }
-  }, [cursorRow, cursorCol, cursorState, selectedSquare, legalTargets, engine, playerColor, mode, getLegalTargets, updateState, logChessState]);
+  }, [cursorState, selectedSquare, legalTargets, engine, playerColor, mode, getLegalTargets, updateState, logChessState]);
 
   // Undo - MUST be defined before handleTextSubmit
   const handleUndo = useCallback(() => {
@@ -936,6 +940,87 @@ const Chess: React.FC<ChessProps> = ({
       if (key.return) handleCursorAction();
     }
   });
+
+  // WebSocket command bridge - handle key events from remote AI agents
+  useEffect(() => {
+    const handleWsKey = (key: string) => {
+      const lowerKey = key.toLowerCase();
+      const dir = flipped ? -1 : 1;
+
+      // Handle escape
+      if (lowerKey === 'escape' || lowerKey === 'esc') {
+        if (cursorState === 'moving') {
+          setSelectedSquare(null);
+          setLegalTargets(new Set());
+          setCursorState('selecting');
+          setError(null);
+        } else {
+          onExit();
+        }
+        return;
+      }
+
+      // Handle tab to switch input mode
+      if (lowerKey === 'tab') {
+        setInputMode(m => m === 'cursor' ? 'text' : 'cursor');
+        return;
+      }
+
+      // In cursor mode, handle hotkeys and arrow keys
+      if (inputMode === 'cursor') {
+        if (lowerKey === 'h') { handleHint(); return; }
+        if (lowerKey === 'u') { handleUndo(); return; }
+        if (lowerKey === 'f') { setFlipped(f => !f); return; }
+        if (lowerKey === 'n') { handleNew(); return; }
+
+        // Arrow keys
+        if (lowerKey === 'up') {
+          const newRow = Math.max(0, Math.min(7, cursorRowRef.current - dir));
+          cursorRowRef.current = newRow;
+          setCursorRow(newRow);
+          return;
+        }
+        if (lowerKey === 'down') {
+          const newRow = Math.max(0, Math.min(7, cursorRowRef.current + dir));
+          cursorRowRef.current = newRow;
+          setCursorRow(newRow);
+          return;
+        }
+        if (lowerKey === 'left') {
+          const newCol = Math.max(0, Math.min(7, cursorColRef.current - dir));
+          cursorColRef.current = newCol;
+          setCursorCol(newCol);
+          return;
+        }
+        if (lowerKey === 'right') {
+          const newCol = Math.max(0, Math.min(7, cursorColRef.current + dir));
+          cursorColRef.current = newCol;
+          setCursorCol(newCol);
+          return;
+        }
+        if (lowerKey === 'enter' || lowerKey === 'return') {
+          handleCursorAction();
+          return;
+        }
+      }
+
+      // In text mode, handle text input for SAN moves
+      if (inputMode === 'text') {
+        if (lowerKey === 'enter' || lowerKey === 'return') {
+          // Submit the current move input
+          handleTextSubmit(moveInput);
+        } else if (key.length === 1) {
+          // Append character to move input
+          setMoveInput(prev => prev + key);
+        }
+      }
+    };
+
+    commandBridge.on('key', handleWsKey);
+    return () => {
+      commandBridge.off('key', handleWsKey);
+    };
+  }, [flipped, inputMode, cursorState, moveInput, handleCursorAction, handleTextSubmit, handleHint, handleUndo, handleNew, onExit]);
 
   const isGameOver = engine.isGameOver();
 
