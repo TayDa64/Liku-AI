@@ -214,7 +214,7 @@ Before your first Chess game, register your identity:
 
 **Windows:**
 ```powershell
-# Signal file expires after 30 seconds - set right before entering Chess
+# Signal file expires after 60 seconds - set right before entering Chess
 $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude`n$timestamp"
 ```
