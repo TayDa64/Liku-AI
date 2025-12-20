@@ -11,6 +11,9 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Chess } from 'chess.js';
+import { Worker } from 'worker_threads';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { ChessEngine } from './ChessEngine.js';
 import { ChessEvaluator } from './ChessEvaluator.js';
 import { ChessSearch } from './ChessSearch.js';
@@ -27,6 +30,10 @@ import {
   Move,
   SearchResult,
 } from './types.js';
+
+// Get directory for worker resolution
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // =============================================================================
 // Difficulty Presets
@@ -111,6 +118,13 @@ export class ChessAI {
   private openings: ChessOpenings;
   private genAI: GoogleGenerativeAI | null = null;
   private chess: Chess;
+  private worker: Worker | null = null;
+  
+  // Pondering state
+  private ponderMove: string | null = null;
+  private ponderFen: string | null = null;
+  private ponderResult: SearchResult | null = null;
+  private isPondering: boolean = false;
 
   constructor(config?: Partial<AIConfig>) {
     this.config = { ...DEFAULT_AI_CONFIG, ...config };
@@ -126,12 +140,158 @@ export class ChessAI {
     }
   }
 
+  // =============================================================================
+  // Pondering Methods - Think during opponent's turn
+  // =============================================================================
+
+  /**
+   * Start pondering on predicted opponent response
+   * Called after making a move with the expected opponent reply
+   */
+  private startPondering(currentFen: string, ourMove: string, expectedOpponentMove: string): void {
+    if (this.isPondering) return;
+    
+    // Build the position after our move and the expected opponent response
+    const tempChess = new Chess(currentFen);
+    
+    // Make our move first
+    try {
+      tempChess.move(ourMove);
+    } catch {
+      return; // Invalid move
+    }
+    
+    // Make expected opponent move
+    try {
+      tempChess.move(expectedOpponentMove);
+    } catch {
+      return; // Invalid opponent move prediction
+    }
+    
+    // This is the position we'll analyze - after both moves
+    this.ponderMove = expectedOpponentMove;
+    this.ponderFen = tempChess.fen();
+    this.isPondering = true;
+    
+    // Start a background search on the predicted position
+    // Use main thread for now (worker is for active search)
+    setTimeout(() => {
+      if (!this.isPondering || !this.ponderFen) return;
+      
+      try {
+        const result = this.search.search(
+          this.ponderFen,
+          this.config.maxDepth,
+          this.config.maxTime * 2 // Give more time for pondering
+        );
+        
+        // Only save result if still pondering same position
+        if (this.isPondering && this.ponderFen === tempChess.fen()) {
+          this.ponderResult = result;
+        }
+      } catch {
+        // Pondering failed - that's okay, we'll search normally
+        this.clearPonderState();
+      }
+    }, 0);
+  }
+
+  /**
+   * Stop pondering (called when opponent makes a move)
+   */
+  private stopPondering(): void {
+    this.isPondering = false;
+    // Note: The actual search may still complete, but we won't use the result
+    // unless the opponent played the expected move
+  }
+
+  /**
+   * Clear all pondering state
+   */
+  private clearPonderState(): void {
+    this.ponderMove = null;
+    this.ponderFen = null;
+    this.ponderResult = null;
+    this.isPondering = false;
+  }
+
+  /**
+   * Check if AI predicted opponent's move correctly
+   */
+  isPonderHit(currentFen: string): boolean {
+    return this.ponderResult !== null && this.ponderFen === currentFen;
+  }
+
+  // =============================================================================
+  // Worker Management
+  // =============================================================================
+
+  /**
+   * Get or create worker instance
+   */
+  private getWorker(): Worker {
+    if (!this.worker) {
+      const workerPath = path.join(__dirname, 'workers', 'ai.worker.js');
+      this.worker = new Worker(workerPath);
+      
+      // Handle worker errors
+      this.worker.on('error', (err) => {
+        console.error('Chess AI Worker Error:', err);
+        // Terminate and clear so we recreate on next request
+        this.worker?.terminate();
+        this.worker = null;
+      });
+      
+      this.worker.on('exit', (code) => {
+        if (code !== 0) {
+          console.error(`Chess AI Worker stopped with exit code ${code}`);
+          this.worker = null;
+        }
+      });
+    }
+    return this.worker;
+  }
+
   /**
    * Get the best move for a position
    * @param fen - Position in FEN notation
    * @returns AI move with evaluation and reasoning
    */
   async getBestMove(fen: string): Promise<AIMove> {
+    // Stop any existing pondering
+    this.stopPondering();
+    
+    // Check for ponder hit - if opponent played the predicted move, use cached result
+    if (this.ponderResult && this.ponderFen === fen) {
+      const result = this.ponderResult;
+      this.clearPonderState();
+      
+      // Apply difficulty adjustment if needed
+      this.chess.load(fen);
+      const legalMoves = this.chess.moves();
+      let selectedMove = result.bestMove;
+      if (this.config.targetElo && this.config.targetElo < 2400) {
+        selectedMove = this.applyDifficultyAdjustment(fen, result, legalMoves);
+      }
+      
+      const alternatives = this.getAlternatives(fen, result.bestMove);
+      
+      // Start pondering on our predicted opponent response
+      if (result.ponderMove) {
+        this.startPondering(fen, selectedMove, result.ponderMove);
+      }
+      
+      return {
+        move: selectedMove,
+        evaluation: result.score,
+        confidence: this.calculateConfidence(result),
+        searchInfo: result,
+        alternatives,
+        reasoning: 'Ponder hit - instant response',
+      };
+    }
+    
+    this.clearPonderState();
     this.chess.load(fen);
     
     const legalMoves = this.chess.moves();
@@ -175,6 +335,103 @@ export class ChessAI {
       }
     }
 
+    // Use Worker for search to prevent UI freezing
+    try {
+      const result = await this.runWorkerSearch(fen, legalMoves);
+      
+      // Start pondering on predicted opponent response if we have a ponder move
+      if (result.searchInfo?.ponderMove) {
+        this.startPondering(fen, result.move, result.searchInfo.ponderMove);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Worker search failed, falling back to main thread:', error);
+      // Fallback to main thread search if worker fails
+      return this.runMainThreadSearch(fen, legalMoves);
+    }
+  }
+
+  /**
+   * Run search in worker thread
+   */
+  private runWorkerSearch(fen: string, legalMoves: string[]): Promise<AIMove> {
+    return new Promise((resolve, reject) => {
+      const worker = this.getWorker();
+      
+      // Set up one-time listener for the result
+      const handleMessage = (msg: any) => {
+        if (msg.type === 'RESULT') {
+          cleanup();
+          
+          // Build search result with ponder move from PV
+          const pv = msg.pv || [];
+          const searchResult: SearchResult = {
+            bestMove: msg.move,
+            score: msg.evaluation,
+            depth: msg.stats.depth,
+            nodes: msg.stats.nodes,
+            time: msg.stats.time,
+            seldepth: msg.stats.seldepth || 0,
+            pv,
+            aborted: false,
+            hashFull: msg.stats.hashFull || 0,
+            nps: msg.stats.nps,
+            ponderMove: pv.length >= 2 ? pv[1] : undefined,
+          };
+          
+          // Apply difficulty adjustment
+          let selectedMove = msg.move;
+          if (this.config.targetElo && this.config.targetElo < 2400) {
+            selectedMove = this.applyDifficultyAdjustment(fen, searchResult, legalMoves);
+          }
+
+          // Get alternatives (quick eval on main thread is fine)
+          const alternatives = this.getAlternatives(fen, msg.move);
+
+          resolve({
+            move: selectedMove,
+            evaluation: msg.evaluation,
+            confidence: this.calculateConfidence(searchResult),
+            alternatives,
+            searchInfo: searchResult,
+          });
+        } else if (msg.type === 'ERROR') {
+          cleanup();
+          reject(new Error(msg.error));
+        }
+      };
+
+      const cleanup = () => {
+        worker.off('message', handleMessage);
+        clearTimeout(timeoutId);
+      };
+
+      // Timeout watchdog - 10 seconds max
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        // Don't reject, just terminate worker and try to recover or throw
+        this.worker?.terminate();
+        this.worker = null;
+        reject(new Error('AI search timed out'));
+      }, 10000);
+
+      worker.on('message', handleMessage);
+
+      // Send task
+      worker.postMessage({
+        type: 'SEARCH',
+        fen,
+        depth: this.config.maxDepth,
+        time: this.config.maxTime
+      });
+    });
+  }
+
+  /**
+   * Run search in main thread (fallback)
+   */
+  private runMainThreadSearch(fen: string, legalMoves: string[]): AIMove {
     // Minimax search
     const searchResult = this.search.search(
       fen,
@@ -289,7 +546,22 @@ export class ChessAI {
   }
 
   /**
-   * Apply difficulty adjustment to move selection
+   * Generate Gaussian (normal) distributed random number using Box-Muller transform
+   * @param mean - Center of distribution
+   * @param stdDev - Standard deviation (spread)
+   */
+  private gaussianRandom(mean: number = 0, stdDev: number = 1): number {
+    const u1 = Math.random();
+    const u2 = Math.random();
+    const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+    return z0 * stdDev + mean;
+  }
+
+  /**
+   * Apply difficulty adjustment to move selection using evaluation noise
+   * Instead of random blunders, we add Gaussian noise to evaluations
+   * This creates "human-like" play where the AI occasionally prefers
+   * slightly suboptimal moves, rather than making obvious blunders
    */
   private applyDifficultyAdjustment(
     fen: string,
@@ -298,17 +570,71 @@ export class ChessAI {
   ): string {
     if (!this.config.targetElo) return searchResult.bestMove;
     
-    // Calculate blunder probability based on target ELO
-    // Higher ELO = lower chance of selecting suboptimal move
-    const blunderChance = Math.max(0, (2400 - this.config.targetElo) / 4000);
+    // Calculate noise level based on target ELO
+    // Higher ELO = less noise = more accurate play
+    // ELO 800:  stdDev ~160 centipawns (±1.6 pawns of noise)
+    // ELO 1200: stdDev ~120 centipawns
+    // ELO 1600: stdDev ~80 centipawns
+    // ELO 2000: stdDev ~40 centipawns
+    // ELO 2400: stdDev ~0 centipawns (perfect play)
+    const noiseStdDev = Math.max(0, (2400 - this.config.targetElo) / 10);
     
-    if (Math.random() < blunderChance) {
-      // Select a random legal move (weighted toward reasonable moves)
-      const randomIdx = Math.floor(Math.random() * Math.min(legalMoves.length, 5));
-      return legalMoves[randomIdx];
+    // If noise is negligible, return best move
+    if (noiseStdDev < 5) return searchResult.bestMove;
+    
+    // Evaluate top moves with noise
+    this.chess.load(fen);
+    const candidateMoves: Array<{ move: string; score: number; noisyScore: number }> = [];
+    
+    // Start with the best move from search
+    candidateMoves.push({
+      move: searchResult.bestMove,
+      score: searchResult.score,
+      noisyScore: searchResult.score + this.gaussianRandom(0, noiseStdDev),
+    });
+    
+    // Evaluate other candidate moves (top 6-8 for variety)
+    const movesToEvaluate = Math.min(legalMoves.length, 8);
+    for (let i = 0; i < movesToEvaluate; i++) {
+      const move = legalMoves[i];
+      if (move === searchResult.bestMove) continue;
+      
+      // Quick 1-ply evaluation for candidate moves
+      try {
+        this.chess.move(move);
+        const score = -this.evaluator.evaluate(this.chess.fen());
+        this.chess.undo();
+        
+        candidateMoves.push({
+          move,
+          score,
+          noisyScore: score + this.gaussianRandom(0, noiseStdDev),
+        });
+      } catch {
+        // Skip invalid moves
+        this.chess.load(fen);
+      }
     }
     
-    return searchResult.bestMove;
+    // Sort by noisy score (descending) and select best
+    candidateMoves.sort((a, b) => b.noisyScore - a.noisyScore);
+    
+    // Safety: never select a move that's catastrophically worse
+    // Even weak players don't usually hang their queen for nothing
+    const selected = candidateMoves[0];
+    const actualBest = candidateMoves.find(m => m.move === searchResult.bestMove);
+    
+    if (actualBest && selected.score < actualBest.score - 400) {
+      // If selected move is >4 pawns worse, 70% chance to reconsider
+      // This prevents completely random blunders at any level
+      if (Math.random() < 0.7) {
+        // Select from top 3 moves instead
+        const safeIdx = Math.floor(Math.random() * Math.min(3, candidateMoves.length));
+        return candidateMoves[safeIdx].move;
+      }
+    }
+    
+    return selected.move;
   }
 
   /**

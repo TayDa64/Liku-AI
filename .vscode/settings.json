@@ -1,0 +1,14 @@
+{
+  "chat.instructionsFilesLocations": {
+    "**/*.md": true
+  },
+  "github.copilot.chat.codeGeneration.instructions": [
+    {
+      "text": "⚠️ DO NOT run 'npm start' or 'node dist/index.js' in this terminal! This TUI will hang the IDE. Read LIKU-CORE.md first for proper launch instructions."
+    }
+  ],
+  "github.copilot.chat.terminalChatLocation": "quickChat",
+  "files.associations": {
+    "LIKU-*.md": "markdown"
+  }
+}

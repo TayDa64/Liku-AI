@@ -52,8 +52,10 @@ const WebSocket = require('ws');
 const args = process.argv.slice(2);
 const options = {
   key: null,
+  text: null,
   action: null,
   move: null,
+  session: null,
   query: null,
   port: 3847,
   timeout: 2000,
@@ -71,6 +73,10 @@ for (let i = 0; i < args.length; i++) {
       options.key = next;
       i++;
       break;
+    case '--text':
+      options.text = next;
+      i++;
+      break;
     case '--action':
     case '-a':
       options.action = next;
@@ -79,6 +85,10 @@ for (let i = 0; i < args.length; i++) {
     case '--move':
     case '-m':
       options.move = next;
+      i++;
+      break;
+    case '--session':
+      options.session = next;
       i++;
       break;
     case '--query':
@@ -122,7 +132,8 @@ send-command.js - Cross-Platform LikuBuddy Command Sender
 
 USAGE:
   node send-command.js --key <key>
-  node send-command.js --action <action> [--move <san>]
+  node send-command.js --text <string>
+  node send-command.js --action <action> [--move <san>] [--session <id>]
   node send-command.js --query <type>
 
 KEY OPTIONS:
@@ -131,7 +142,9 @@ KEY OPTIONS:
   escape, esc             Escape
   space                   Space bar
   tab                     Tab key
-  <text>                  Any text (for chess moves like "e4", "Nf3")
+
+TEXT OPTIONS:
+  --text "e4"             Send full text string (e.g. chess move)
 
 ACTION OPTIONS:
   jump, duck              Dino Run
@@ -145,6 +158,7 @@ QUERY OPTIONS:
   gameState               Current game state
   possibleActions         Valid actions
   stats                   Player statistics
+  session                 Active session info
 
 EXAMPLES:
   # Navigate menu
@@ -152,9 +166,7 @@ EXAMPLES:
   node send-command.js --key enter
 
   # Play chess (text mode)
-  node send-command.js --key tab
-  node send-command.js --key "e4"
-  node send-command.js --key enter
+  node send-command.js --text "e4"
 
   # Play chess (action mode)
   node send-command.js --action chess_move --move e4
@@ -175,9 +187,9 @@ OPTIONS:
 // Validation
 // ============================================================
 
-if (!options.key && !options.action && !options.query) {
+if (!options.key && !options.action && !options.query && !options.text) {
   if (!options.silent) {
-    console.error('Error: Must specify --key, --action, or --query');
+    console.error('Error: Must specify --key, --text, --action, or --query');
     console.error('Use --help for usage information');
   }
   process.exit(2);
@@ -286,11 +298,21 @@ function sendCommand() {
           payload: { key: normalizedKey },
           requestId
         };
+      } else if (options.text) {
+        // Text command
+        message = {
+          type: 'text',
+          payload: { text: options.text },
+          requestId
+        };
       } else if (options.action) {
         // Action command
         const payload = { action: options.action };
         if (options.move) {
           payload.move = options.move;
+        }
+        if (options.session) {
+          payload.sessionId = options.session;
         }
         message = {
           type: 'action',

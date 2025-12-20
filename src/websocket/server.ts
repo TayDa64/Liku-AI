@@ -55,11 +55,12 @@ export interface GameState {
 }
 
 export interface AICommand {
-  type: 'key' | 'action' | 'query' | 'ping' | 'subscribe' | 'unsubscribe';
+  type: 'key' | 'action' | 'query' | 'ping' | 'subscribe' | 'unsubscribe' | 'text';
   payload: {
     key?: string;
     action?: string;
     query?: string;
+    text?: string;
     events?: string[];
     // Session action fields (AI-vs-AI games)
     sessionId?: string;

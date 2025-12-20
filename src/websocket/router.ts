@@ -22,6 +22,7 @@ import {
   PlayerType,
   PlayerSlot,
   SessionConfig,
+  GameSession,
 } from './sessions.js';
 import { 
   MatchmakingManager, 
@@ -204,7 +205,8 @@ const VALID_ACTIONS = new Set<string>(Object.keys(ACTION_TO_KEYS));
  * 
  * Events:
  * - 'key': (key: ValidKey, clientId: string) - Key press to execute
- * - 'action': (action: GameAction, clientId: string) - Action to execute
+ * - 'text': (text: string, clientId: string) - Full text input
+ * - 'action': (action: GameAction, clientId: string, payload?: any) - Action to execute
  * - 'query': (query: QueryType, clientId: string, callback: (result: unknown) => void)
  * - 'error': (error: Error, clientId: string)
  * - 'rateLimit': (clientId: string, reason: string)
@@ -300,6 +302,8 @@ export class CommandRouter extends EventEmitter {
       switch (command.type) {
         case 'key':
           return this.handleKeyCommand(clientId, command);
+        case 'text':
+          return this.handleTextCommand(clientId, command);
         case 'action':
           return this.handleActionCommand(clientId, command);
         case 'query':
@@ -340,6 +344,35 @@ export class CommandRouter extends EventEmitter {
       data: { 
         executed: true, 
         key: sanitizedKey,
+        timestamp: Date.now(),
+      },
+      timestamp: Date.now(),
+    };
+  }
+
+  /**
+   * Handle a text command (full string input)
+   */
+  private handleTextCommand(clientId: string, command: AICommand): AIResponse {
+    const text = command.payload.text;
+
+    if (!text) {
+      return this.errorResponse('Text is required', command.requestId);
+    }
+
+    // Sanitize text (allow spaces and common punctuation)
+    // We use a slightly more permissive sanitizer for text than for keys
+    const sanitizedText = text.replace(/[^a-z0-9_\-\+\#\s\.\,\!\?]/gi, '').trim();
+    
+    // Emit text event for game to handle
+    this.emit('text', sanitizedText, clientId);
+
+    return {
+      type: 'ack',
+      requestId: command.requestId,
+      data: { 
+        executed: true, 
+        text: sanitizedText,
         timestamp: Date.now(),
       },
       timestamp: Date.now(),
@@ -791,8 +824,27 @@ export class CommandRouter extends EventEmitter {
     const payload = command.payload;
     const sessionId = payload.sessionId as string;
 
+    // If no sessionId, treat as a local TUI action (emit generic action event)
     if (!sessionId) {
-      return this.errorResponse('sessionId is required for chess actions', command.requestId);
+      // For chess_move, we need the move parameter
+      if (action === 'chess_move' && !payload.move) {
+        return this.errorResponse('move is required for chess_move', command.requestId);
+      }
+
+      // Emit generic action event for TUI to pick up
+      this.emit('action', action, clientId, payload);
+      
+      return {
+        type: 'ack',
+        requestId: command.requestId,
+        data: {
+          executed: true,
+          action,
+          mode: 'local_tui',
+          timestamp: Date.now(),
+        },
+        timestamp: Date.now(),
+      };
     }
 
     const session = this.sessionManager.getSession(sessionId);
@@ -1338,6 +1390,28 @@ export class CommandRouter extends EventEmitter {
           timestamp: Date.now(),
         };
 
+      case 'session':
+        // Return active session info for this client
+        const activeSessions = this.sessionManager.getAgentSessions(clientId);
+        return {
+          type: 'result',
+          requestId: command.requestId,
+          data: {
+            activeSessions: activeSessions.map((s: GameSession) => {
+              const state = s.state as any;
+              return {
+                id: s.id,
+                gameType: s.config.gameType,
+                status: s.status,
+                currentPlayer: state.currentPlayer,
+                yourSlot: Array.from(s.players.entries()).find(([_, p]) => p.agentId === clientId)?.[0] || 'spectator'
+              };
+            }),
+            count: activeSessions.length
+          },
+          timestamp: Date.now(),
+        };
+
       case 'possibleactions':
         return {
           type: 'result',
@@ -1417,10 +1491,12 @@ export class CommandRouter extends EventEmitter {
 
   /**
    * Sanitize user input to prevent injection attacks
+   * Allows alphanumeric, underscore, hyphen, plus, hash, and space
    */
   private sanitizeInput(input: string): string {
-    // Remove any non-alphanumeric characters except underscore
-    return input.replace(/[^a-z0-9_]/gi, '').toLowerCase();
+    // Allow a-z, 0-9, _, -, +, #, and space
+    // This supports chess moves (O-O, e4+, #) and basic text
+    return input.replace(/[^a-z0-9_\-\+\#\s]/gi, '').trim();
   }
 
   /**

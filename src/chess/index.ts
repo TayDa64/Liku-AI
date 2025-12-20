@@ -92,6 +92,7 @@ export type {
   TTEntryType,
   SearchStats,
   SearchResult,
+  MultiPVResult,
   
   // AI
   AIDifficulty,

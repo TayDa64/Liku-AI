@@ -174,17 +174,22 @@ Register your identity before playing Chess to trigger your intro video:
 
 **Windows:**
 ```powershell
+# Signal file format: Line 1 = agent ID, Line 2 = timestamp (expires after 30s)
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.liku-ai" | Out-Null
-Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude"
+$timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude`n$timestamp"
 ```
 
 **Linux/macOS:**
 ```bash
+# Signal file format: Line 1 = agent ID, Line 2 = timestamp (expires after 30s)
 mkdir -p ~/.liku-ai
-echo "claude" > ~/.liku-ai/current-agent.txt
+echo -e "claude\n$(date +%s%3N)" > ~/.liku-ai/current-agent.txt
 ```
 
 **Supported IDs:** `claude`, `gemini`, `chatgpt`, `grok` (and aliases like `anthropic`, `openai`, `google`, etc.)
+
+> **Note:** Signal files expire after 30 seconds to prevent stale agent detection from previous sessions.
 
 ### ⏳ Intro Video Handling (CRITICAL)
 

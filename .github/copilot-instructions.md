@@ -1,5 +1,20 @@
 # LikuBuddy - GitHub Copilot Coding Agent Instructions
 
+## ⛔ CRITICAL: READ BEFORE ANY ACTION
+
+> **DO NOT run `npm start` or `node dist/index.js` in this terminal!**
+> 
+> This is a TUI application that will **hang your IDE** if run inline.
+> 
+> **To play games (Chess, Snake, etc.):**
+> 1. **READ FIRST:** [LIKU-CORE.md](../LIKU-CORE.md) - Required setup & launch instructions
+> 2. **THEN READ:** Game-specific docs in `docs/ai/` (e.g., `LIKU-CHESS.md`)
+> 
+> The game MUST run in a **separate terminal window**, not in VS Code's integrated terminal.
+> See LIKU-CORE.md for the correct `Start-Process` command.
+
+---
+
 ## Project Overview
 
 **LikuBuddy** is an AI-powered generative game platform and terminal companion built as a TUI (Terminal User Interface) extension for the Gemini CLI. It enables users to create games through natural language descriptions, play built-in arcade games, manage a virtual companion (Liku), and track progress through a SQLite database.

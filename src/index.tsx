@@ -7,9 +7,13 @@ import { EventEmitter } from 'node:events';
 import GameHub from './ui/LikuTUI.js';
 import { wsServer } from './websocket/server.js';
 import { setWebSocketEnabled, setFileLoggingEnabled } from './core/GameStateLogger.js';
+import { clearAgentSignal } from './intro/IntroPlayer.js';
 
 // State file path for AI visibility
 const STATE_FILE = path.join(process.cwd(), 'likubuddy-state.txt');
+
+// Staleness threshold for state file (60 seconds)
+const STATE_FILE_STALE_MS = 60 * 1000;
 
 // ============================================================
 // WebSocket → React Bridge
@@ -111,6 +115,70 @@ const cli = meow(`
 });
 
 // ============================================================
+// Pre-flight Safety Check for AI Agents
+// Detects if running in VS Code's integrated terminal and warns
+// AI agents to use proper launch method (Start-Process)
+// ============================================================
+const checkAISafetyPreFlight = (): boolean => {
+  // Skip check if --ai flag is set (agent knows what it's doing)
+  if (cli.flags.ai) return true;
+  
+  // Skip check if explicitly disabled
+  if (process.env.LIKU_SKIP_SAFETY_CHECK === '1') return true;
+  
+  // Check for VS Code integrated terminal indicators
+  const isVSCodeTerminal = !!(
+    process.env.VSCODE_INJECTION ||
+    process.env.TERM_PROGRAM === 'vscode' ||
+    process.env.VSCODE_GIT_IPC_HANDLE ||
+    process.env.VSCODE_PID
+  );
+  
+  // Check for GitHub Copilot / AI tool indicators
+  const isLikelyAISession = !!(
+    process.env.GITHUB_COPILOT_AGENT ||
+    process.env.CURSOR_SESSION ||
+    process.env.AIDER_SESSION ||
+    // Parent process check for AI tools running terminal commands
+    process.ppid && process.env.VSCODE_PID
+  );
+  
+  // If in VS Code terminal AND looks like AI session, warn and exit
+  if (isVSCodeTerminal) {
+    console.log(`
+╔══════════════════════════════════════════════════════════════════════╗
+║                    ⚠️  LIKU-AI SAFETY CHECK  ⚠️                        ║
+╠══════════════════════════════════════════════════════════════════════╣
+║  This is a TUI application that will HANG your IDE if run inline!   ║
+║                                                                      ║
+║  AI AGENTS: You MUST read the instructions first:                   ║
+║                                                                      ║
+║    📖 LIKU-CORE.md          - Required setup & launch instructions  ║
+║    📖 docs/ai/LIKU-CHESS.md - Chess-specific instructions           ║
+║                                                                      ║
+║  CORRECT LAUNCH METHOD (Windows PowerShell):                        ║
+║                                                                      ║
+║    Start-Process pwsh -ArgumentList "-NoExit", "-Command",          ║
+║      "cd ${process.cwd().replace(/\\/g, '/')}; node dist/index.js"                         ║
+║                                                                      ║
+║  To bypass this check (humans only):                                ║
+║    - Set LIKU_SKIP_SAFETY_CHECK=1 environment variable              ║
+║    - Or run with: node dist/index.js --ai                           ║
+║                                                                      ║
+╚══════════════════════════════════════════════════════════════════════╝
+`);
+    return false;
+  }
+  
+  return true;
+};
+
+// Run safety check - exit if unsafe
+if (!checkAISafetyPreFlight()) {
+  process.exit(0);
+}
+
+// ============================================================
 // Fullscreen Mode Initialization
 // Uses alternate screen buffer to prevent scroll artifacts
 // This is the pattern used by vim, htop, and other TUI apps
@@ -143,6 +211,43 @@ const clearStateFile = () => {
     // Ignore errors - file may not exist or be locked
   }
 };
+
+// Check and clean stale state file on startup
+// This handles the case where the previous terminal was forcefully closed
+const cleanStaleStateFile = () => {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      const content = fs.readFileSync(STATE_FILE, 'utf-8');
+      
+      // Check if already terminated
+      if (content.includes('PROCESS ID: TERMINATED')) {
+        // Already clean
+        return;
+      }
+      
+      // Try to extract timestamp from state file
+      const timestampMatch = content.match(/TIMESTAMP:\s*(\d+)/);
+      if (timestampMatch) {
+        const timestamp = parseInt(timestampMatch[1], 10);
+        const age = Date.now() - timestamp;
+        
+        if (age > STATE_FILE_STALE_MS) {
+          // State file is stale - previous process didn't clean up
+          console.log(`[Startup] Cleaning stale state file (age: ${Math.round(age / 1000)}s)`);
+          clearStateFile();
+        }
+      } else {
+        // No timestamp = legacy file, clear it
+        clearStateFile();
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+};
+
+// Run stale cleanup on startup
+cleanStaleStateFile();
 
 // ============================================================
 // WebSocket Server Management
@@ -217,10 +322,11 @@ const stopWebSocketServer = async (): Promise<void> => {
 // Initialize fullscreen mode BEFORE React renders
 initFullscreen();
 
-// Handle exit cleanup - clear state file, stop WebSocket, and restore terminal
+// Handle exit cleanup - clear state file, stop WebSocket, clear agent signal, and restore terminal
 const cleanup = async () => {
   await stopWebSocketServer();
   clearStateFile();
+  clearAgentSignal();
   exitFullscreen();
 };
 
@@ -228,6 +334,7 @@ const cleanup = async () => {
 const cleanupSync = () => {
   stopWebSocketServer().catch(() => {});
   clearStateFile();
+  clearAgentSignal();
   exitFullscreen();
 };
 

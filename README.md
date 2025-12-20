@@ -28,6 +28,19 @@
 
 ---
 
+## ⛔ FOR AI AGENTS: READ THIS FIRST
+
+> **DO NOT run `npm start` in VS Code's integrated terminal!**
+> 
+> This is a TUI that will hang your IDE. You MUST:
+> 1. **Read [LIKU-CORE.md](LIKU-CORE.md)** - Essential setup and launch instructions
+> 2. **Read game docs** in `docs/ai/` before playing any game
+> 
+> The correct way to launch is via `Start-Process` (Windows) or background process (Linux).
+> See LIKU-CORE.md for details.
+
+---
+
 ## 🎯 What is Liku-AI?
 
 Liku-AI is a **terminal-based game platform** designed for both human players and AI agents. It provides:

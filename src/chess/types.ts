@@ -287,6 +287,10 @@ export interface SearchStats {
   lmrReductions: number;
   /** Quiescence nodes */
   qNodes: number;
+  /** SEE prunes in quiescence */
+  seePrunes: number;
+  /** Counter-move table hits */
+  counterMoveHits: number;
 }
 
 /** Search result */
@@ -305,6 +309,35 @@ export interface SearchResult {
   time: number;
   /** Principal variation (best line) */
   pv: string[];
+  /** Whether search was aborted */
+  aborted: boolean;
+  /** Hash table fill percentage */
+  hashFull: number;
+  /** Nodes per second */
+  nps: number;
+  /** Ponder move - expected opponent reply (2nd move in PV) */
+  ponderMove?: string;
+}
+
+/** Multi-PV search result - contains multiple principal variations */
+export interface MultiPVResult {
+  /** Array of PV lines, sorted by score (best first) */
+  lines: Array<{
+    /** Moves in this line */
+    pv: string[];
+    /** Evaluation score in centipawns */
+    score: number;
+    /** Rank (1 = best, 2 = second best, etc.) */
+    rank: number;
+  }>;
+  /** Search depth completed */
+  depth: number;
+  /** Selective depth */
+  seldepth: number;
+  /** Total nodes searched */
+  nodes: number;
+  /** Search time in ms */
+  time: number;
   /** Whether search was aborted */
   aborted: boolean;
   /** Hash table fill percentage */

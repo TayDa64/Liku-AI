@@ -33,7 +33,11 @@ const OPENING_BOOK: Map<string, BookMove[]> = new Map();
  * Named openings for display
  */
 const NAMED_OPENINGS: Opening[] = [
-  // King's Pawn Openings
+  // ==========================================================================
+  // KING'S PAWN OPENINGS (e4)
+  // ==========================================================================
+  
+  // Italian Game Complex
   {
     eco: 'C50',
     name: 'Italian Game',
@@ -41,11 +45,81 @@ const NAMED_OPENINGS: Opening[] = [
     fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
   },
   {
+    eco: 'C53',
+    name: 'Giuoco Piano',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5'],
+    fen: 'r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+  },
+  {
+    eco: 'C54',
+    name: 'Giuoco Piano Main Line',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'c3', 'Nf6', 'd4'],
+    fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p3/2BPP3/2P2N2/PP3PPP/RNBQK2R b KQkq d3 0 5',
+  },
+  {
+    eco: 'C51',
+    name: 'Evans Gambit',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'b4'],
+    fen: 'r1bqk1nr/pppp1ppp/2n5/2b1p3/1PB1P3/5N2/P1PP1PPP/RNBQK2R b KQkq b3 0 4',
+  },
+  {
+    eco: 'C55',
+    name: 'Two Knights Defense',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nf6'],
+    fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+  },
+  {
+    eco: 'C57',
+    name: 'Traxler Counterattack',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Nf6', 'Ng5', 'Bc5'],
+    fen: 'r1bqk2r/pppp1ppp/2n2n2/2b1p1N1/2B1P3/8/PPPP1PPP/RNBQK2R w KQkq - 5 5',
+  },
+  
+  // Ruy Lopez Complex
+  {
     eco: 'C60',
     name: 'Ruy Lopez',
     moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5'],
     fen: 'r1bqkbnr/pppp1ppp/2n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3',
   },
+  {
+    eco: 'C65',
+    name: 'Ruy Lopez Berlin Defense',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'Nf6'],
+    fen: 'r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4',
+  },
+  {
+    eco: 'C67',
+    name: 'Berlin Defense Rio de Janeiro',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'Nf6', 'O-O', 'Nxe4'],
+    fen: 'r1bqkb1r/pppp1ppp/2n5/1B2p3/4n3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 0 5',
+  },
+  {
+    eco: 'C78',
+    name: 'Ruy Lopez Morphy Defense',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4', 'Nf6', 'O-O'],
+    fen: 'r1bqkb1r/1ppp1ppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 b kq - 5 5',
+  },
+  {
+    eco: 'C84',
+    name: 'Ruy Lopez Closed Defense',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4', 'Nf6', 'O-O', 'Be7'],
+    fen: 'r1bqk2r/1pppbppp/p1n2n2/4p3/B3P3/5N2/PPPP1PPP/RNBQ1RK1 w kq - 6 6',
+  },
+  {
+    eco: 'C88',
+    name: 'Ruy Lopez Marshall Attack',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Ba4', 'Nf6', 'O-O', 'Be7', 'Re1', 'b5', 'Bb3', 'O-O', 'c3', 'd5'],
+    fen: 'r1bq1rk1/2ppbppp/p1n2n2/1p1pp3/4P3/1BP2N2/PP1P1PPP/RNBQR1K1 w - d6 0 9',
+  },
+  {
+    eco: 'C69',
+    name: 'Ruy Lopez Exchange Variation',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bb5', 'a6', 'Bxc6'],
+    fen: 'r1bqkbnr/1ppp1ppp/p1B5/4p3/4P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 0 4',
+  },
+  
+  // Scotch Game
   {
     eco: 'C45',
     name: 'Scotch Game',
@@ -53,13 +127,72 @@ const NAMED_OPENINGS: Opening[] = [
     fen: 'r1bqkbnr/pppp1ppp/2n5/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq d3 0 3',
   },
   {
-    eco: 'C44',
-    name: "King's Knight Opening",
-    moves: ['e4', 'e5', 'Nf3'],
-    fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2',
+    eco: 'C45',
+    name: 'Scotch Game Classical',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'd4', 'exd4', 'Nxd4', 'Bc5'],
+    fen: 'r1bqk1nr/pppp1ppp/2n5/2b5/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5',
   },
   
-  // Sicilian Defense
+  // Petrov Defense
+  {
+    eco: 'C42',
+    name: 'Petrov Defense',
+    moves: ['e4', 'e5', 'Nf3', 'Nf6'],
+    fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3',
+  },
+  {
+    eco: 'C43',
+    name: 'Petrov Defense Classical',
+    moves: ['e4', 'e5', 'Nf3', 'Nf6', 'Nxe5', 'd6', 'Nf3', 'Nxe4'],
+    fen: 'rnbqkb1r/ppp2ppp/3p4/8/4n3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 0 5',
+  },
+  
+  // Four Knights
+  {
+    eco: 'C47',
+    name: 'Four Knights Game',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Nc3', 'Nf6'],
+    fen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 4',
+  },
+  {
+    eco: 'C48',
+    name: 'Four Knights Spanish',
+    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Nc3', 'Nf6', 'Bb5'],
+    fen: 'r1bqkb1r/pppp1ppp/2n2n2/1B2p3/4P3/2N2N2/PPPP1PPP/R1BQK2R b KQkq - 5 4',
+  },
+  
+  // Vienna Game
+  {
+    eco: 'C25',
+    name: 'Vienna Game',
+    moves: ['e4', 'e5', 'Nc3'],
+    fen: 'rnbqkbnr/pppp1ppp/8/4p3/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2',
+  },
+  {
+    eco: 'C29',
+    name: 'Vienna Gambit',
+    moves: ['e4', 'e5', 'Nc3', 'Nf6', 'f4'],
+    fen: 'rnbqkb1r/pppp1ppp/5n2/4p3/4PP2/2N5/PPPP2PP/R1BQKBNR b KQkq f3 0 3',
+  },
+  
+  // King's Gambit
+  {
+    eco: 'C30',
+    name: "King's Gambit",
+    moves: ['e4', 'e5', 'f4'],
+    fen: 'rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PP/RNBQKBNR b KQkq f3 0 2',
+  },
+  {
+    eco: 'C36',
+    name: "King's Gambit Accepted",
+    moves: ['e4', 'e5', 'f4', 'exf4'],
+    fen: 'rnbqkbnr/pppp1ppp/8/8/4Pp2/8/PPPP2PP/RNBQKBNR w KQkq - 0 3',
+  },
+  
+  // ==========================================================================
+  // SICILIAN DEFENSE COMPLEX (1.e4 c5)
+  // ==========================================================================
+  
   {
     eco: 'B20',
     name: 'Sicilian Defense',
@@ -73,19 +206,94 @@ const NAMED_OPENINGS: Opening[] = [
     fen: 'rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6',
   },
   {
+    eco: 'B92',
+    name: 'Sicilian Najdorf 6.Be2',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6', 'Be2'],
+    fen: 'rnbqkb1r/1p2pppp/p2p1n2/8/3NP3/2N5/PPP1BPPP/R1BQK2R b KQkq - 1 6',
+  },
+  {
+    eco: 'B96',
+    name: 'Sicilian Najdorf 6.Bg5',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6', 'Bg5'],
+    fen: 'rnbqkb1r/1p2pppp/p2p1n2/6B1/3NP3/2N5/PPP2PPP/R2QKB1R b KQkq - 1 6',
+  },
+  {
+    eco: 'B97',
+    name: 'Sicilian Najdorf Poisoned Pawn',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'a6', 'Bg5', 'e6', 'f4', 'Qb6'],
+    fen: 'rnb1kb1r/1p3ppp/pq1ppn2/6B1/3NPP2/2N5/PPP3PP/R2QKB1R w KQkq - 1 8',
+  },
+  {
     eco: 'B33',
     name: 'Sicilian Sveshnikov',
     moves: ['e4', 'c5', 'Nf3', 'Nc6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e5'],
     fen: 'r1bqkb1r/pp1p1ppp/2n2n2/4p3/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6',
   },
   {
-    eco: 'B40',
+    eco: 'B76',
     name: 'Sicilian Dragon',
     moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'g6'],
     fen: 'rnbqkb1r/pp2pp1p/3p1np1/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6',
   },
+  {
+    eco: 'B77',
+    name: 'Sicilian Dragon Yugoslav Attack',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'g6', 'Be3', 'Bg7', 'f3'],
+    fen: 'rnbqk2r/pp2ppbp/3p1np1/8/3NP3/2N1BP2/PPP3PP/R2QKB1R b KQkq - 0 7',
+  },
+  {
+    eco: 'B35',
+    name: 'Sicilian Accelerated Dragon',
+    moves: ['e4', 'c5', 'Nf3', 'Nc6', 'd4', 'cxd4', 'Nxd4', 'g6'],
+    fen: 'r1bqkbnr/pp1ppp1p/2n3p1/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 0 5',
+  },
+  {
+    eco: 'B80',
+    name: 'Sicilian Scheveningen',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e6'],
+    fen: 'rnbqkb1r/pp3ppp/3ppn2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 0 6',
+  },
+  {
+    eco: 'B85',
+    name: 'Sicilian Scheveningen Classical',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e6', 'Be2'],
+    fen: 'rnbqkb1r/pp3ppp/3ppn2/8/3NP3/2N5/PPP1BPPP/R1BQK2R b KQkq - 1 6',
+  },
+  {
+    eco: 'B56',
+    name: 'Sicilian Classical',
+    moves: ['e4', 'c5', 'Nf3', 'd6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'Nc6'],
+    fen: 'r1bqkb1r/pp2pppp/2np1n2/8/3NP3/2N5/PPP2PPP/R1BQKB1R w KQkq - 2 6',
+  },
+  {
+    eco: 'B22',
+    name: 'Sicilian Alapin',
+    moves: ['e4', 'c5', 'c3'],
+    fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/2P5/PP1P1PPP/RNBQKBNR b KQkq - 0 2',
+  },
+  {
+    eco: 'B23',
+    name: 'Sicilian Closed',
+    moves: ['e4', 'c5', 'Nc3'],
+    fen: 'rnbqkbnr/pp1ppppp/8/2p5/4P3/2N5/PPPP1PPP/R1BQKBNR b KQkq - 1 2',
+  },
+  {
+    eco: 'B40',
+    name: 'Sicilian Kan',
+    moves: ['e4', 'c5', 'Nf3', 'e6', 'd4', 'cxd4', 'Nxd4', 'a6'],
+    fen: 'rnbqkbnr/1p1p1ppp/p3p3/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 0 5',
+  },
+  {
+    eco: 'B48',
+    name: 'Sicilian Taimanov',
+    moves: ['e4', 'c5', 'Nf3', 'e6', 'd4', 'cxd4', 'Nxd4', 'Nc6'],
+    fen: 'r1bqkbnr/pp1p1ppp/2n1p3/8/3NP3/8/PPP2PPP/RNBQKB1R w KQkq - 1 5',
+  },
   
-  // French Defense
+  // ==========================================================================
+  // FRENCH DEFENSE (1.e4 e6)
+  // ==========================================================================
+  
   {
     eco: 'C00',
     name: 'French Defense',
@@ -93,13 +301,46 @@ const NAMED_OPENINGS: Opening[] = [
     fen: 'rnbqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
   },
   {
+    eco: 'C03',
+    name: 'French Tarrasch',
+    moves: ['e4', 'e6', 'd4', 'd5', 'Nd2'],
+    fen: 'rnbqkbnr/ppp2ppp/4p3/3p4/3PP3/8/PPPN1PPP/R1BQKBNR b KQkq - 1 3',
+  },
+  {
     eco: 'C11',
-    name: 'French Defense Classical',
+    name: 'French Classical',
     moves: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Nf6'],
     fen: 'rnbqkb1r/ppp2ppp/4pn2/3p4/3PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4',
   },
+  {
+    eco: 'C15',
+    name: 'French Winawer',
+    moves: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Bb4'],
+    fen: 'rnbqk1nr/ppp2ppp/4p3/3p4/1b1PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 2 4',
+  },
+  {
+    eco: 'C16',
+    name: 'French Winawer Advance',
+    moves: ['e4', 'e6', 'd4', 'd5', 'Nc3', 'Bb4', 'e5'],
+    fen: 'rnbqk1nr/ppp2ppp/4p3/3pP3/1b1P4/2N5/PPP2PPP/R1BQKBNR b KQkq - 0 4',
+  },
+  {
+    eco: 'C02',
+    name: 'French Advance',
+    moves: ['e4', 'e6', 'd4', 'd5', 'e5'],
+    fen: 'rnbqkbnr/ppp2ppp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq - 0 3',
+  },
+  {
+    eco: 'C01',
+    name: 'French Exchange',
+    moves: ['e4', 'e6', 'd4', 'd5', 'exd5', 'exd5'],
+    fen: 'rnbqkbnr/ppp2ppp/8/3p4/3P4/8/PPP2PPP/RNBQKBNR w KQkq - 0 4',
+  },
   
-  // Caro-Kann
+  // ==========================================================================
+  // CARO-KANN DEFENSE (1.e4 c6)
+  // ==========================================================================
+  
   {
     eco: 'B10',
     name: 'Caro-Kann Defense',
@@ -112,8 +353,92 @@ const NAMED_OPENINGS: Opening[] = [
     moves: ['e4', 'c6', 'd4', 'd5', 'e5'],
     fen: 'rnbqkbnr/pp2pppp/2p5/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq - 0 3',
   },
+  {
+    eco: 'B13',
+    name: 'Caro-Kann Exchange',
+    moves: ['e4', 'c6', 'd4', 'd5', 'exd5', 'cxd5'],
+    fen: 'rnbqkbnr/pp2pppp/8/3p4/3P4/8/PPP2PPP/RNBQKBNR w KQkq - 0 4',
+  },
+  {
+    eco: 'B14',
+    name: 'Caro-Kann Panov Attack',
+    moves: ['e4', 'c6', 'd4', 'd5', 'exd5', 'cxd5', 'c4'],
+    fen: 'rnbqkbnr/pp2pppp/8/3p4/2PP4/8/PP3PPP/RNBQKBNR b KQkq c3 0 4',
+  },
+  {
+    eco: 'B15',
+    name: 'Caro-Kann Classical',
+    moves: ['e4', 'c6', 'd4', 'd5', 'Nc3', 'dxe4', 'Nxe4', 'Bf5'],
+    fen: 'rn1qkbnr/pp2pppp/2p5/5b2/3PN3/8/PPP2PPP/R1BQKBNR w KQkq - 1 5',
+  },
+  {
+    eco: 'B17',
+    name: 'Caro-Kann Steinitz',
+    moves: ['e4', 'c6', 'd4', 'd5', 'Nc3', 'dxe4', 'Nxe4', 'Nd7'],
+    fen: 'r1bqkbnr/pp1npppp/2p5/8/3PN3/8/PPP2PPP/R1BQKBNR w KQkq - 1 5',
+  },
   
-  // Queen's Pawn Openings
+  // ==========================================================================
+  // SCANDINAVIAN DEFENSE (1.e4 d5)
+  // ==========================================================================
+  
+  {
+    eco: 'B01',
+    name: 'Scandinavian Defense',
+    moves: ['e4', 'd5'],
+    fen: 'rnbqkbnr/ppp1pppp/8/3p4/4P3/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 2',
+  },
+  {
+    eco: 'B01',
+    name: 'Scandinavian Main Line',
+    moves: ['e4', 'd5', 'exd5', 'Qxd5', 'Nc3', 'Qa5'],
+    fen: 'rnb1kbnr/ppp1pppp/8/q7/8/2N5/PPPP1PPP/R1BQKBNR w KQkq - 2 4',
+  },
+  {
+    eco: 'B01',
+    name: 'Scandinavian Modern',
+    moves: ['e4', 'd5', 'exd5', 'Nf6'],
+    fen: 'rnbqkb1r/ppp1pppp/5n2/3P4/8/8/PPPP1PPP/RNBQKBNR w KQkq - 1 3',
+  },
+  
+  // ==========================================================================
+  // PIRC/MODERN DEFENSE
+  // ==========================================================================
+  
+  {
+    eco: 'B07',
+    name: 'Pirc Defense',
+    moves: ['e4', 'd6', 'd4', 'Nf6', 'Nc3', 'g6'],
+    fen: 'rnbqkb1r/ppp1pp1p/3p1np1/8/3PP3/2N5/PPP2PPP/R1BQKBNR w KQkq - 0 4',
+  },
+  {
+    eco: 'B06',
+    name: 'Modern Defense',
+    moves: ['e4', 'g6'],
+    fen: 'rnbqkbnr/pppppp1p/6p1/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2',
+  },
+  
+  // ==========================================================================
+  // ALEKHINE DEFENSE (1.e4 Nf6)
+  // ==========================================================================
+  
+  {
+    eco: 'B02',
+    name: 'Alekhine Defense',
+    moves: ['e4', 'Nf6'],
+    fen: 'rnbqkb1r/pppppppp/5n2/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 1 2',
+  },
+  {
+    eco: 'B03',
+    name: 'Alekhine Four Pawns Attack',
+    moves: ['e4', 'Nf6', 'e5', 'Nd5', 'c4', 'Nb6', 'd4', 'd6', 'f4'],
+    fen: 'rnbqkb1r/ppp1pppp/1n1p4/4P3/2PP1P2/8/PP4PP/RNBQKBNR b KQkq f3 0 5',
+  },
+  
+  // ==========================================================================
+  // QUEEN'S PAWN OPENINGS (1.d4)
+  // ==========================================================================
+  
   {
     eco: 'D00',
     name: "Queen's Pawn Game",
@@ -133,18 +458,87 @@ const NAMED_OPENINGS: Opening[] = [
     fen: 'rnbqkbnr/ppp2ppp/4p3/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
   },
   {
+    eco: 'D37',
+    name: "QGD Orthodox",
+    moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Nf3', 'Be7', 'Bf4'],
+    fen: 'rnbqk2r/ppp1bppp/4pn2/3p4/2PP1B2/2N2N2/PP2PPPP/R2QKB1R b KQkq - 3 5',
+  },
+  {
+    eco: 'D52',
+    name: "QGD Cambridge Springs",
+    moves: ['d4', 'd5', 'c4', 'e6', 'Nc3', 'Nf6', 'Bg5', 'Nbd7', 'e3', 'c6', 'Nf3', 'Qa5'],
+    fen: 'r1b1kb1r/pp1n1ppp/2p1pn2/q2p2B1/2PP4/2N1PN2/PP3PPP/R2QKB1R w KQkq - 2 7',
+  },
+  {
     eco: 'D20',
     name: "Queen's Gambit Accepted",
     moves: ['d4', 'd5', 'c4', 'dxc4'],
     fen: 'rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
   },
+  {
+    eco: 'D21',
+    name: "QGA Main Line",
+    moves: ['d4', 'd5', 'c4', 'dxc4', 'Nf3'],
+    fen: 'rnbqkbnr/ppp1pppp/8/8/2pP4/5N2/PP2PPPP/RNBQKB1R b KQkq - 1 3',
+  },
+  {
+    eco: 'D10',
+    name: 'Slav Defense',
+    moves: ['d4', 'd5', 'c4', 'c6'],
+    fen: 'rnbqkbnr/pp2pppp/2p5/3p4/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
+  },
+  {
+    eco: 'D15',
+    name: 'Slav Main Line',
+    moves: ['d4', 'd5', 'c4', 'c6', 'Nf3', 'Nf6', 'Nc3'],
+    fen: 'rnbqkb1r/pp2pppp/2p2n2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R b KQkq - 3 4',
+  },
+  {
+    eco: 'D43',
+    name: 'Semi-Slav Defense',
+    moves: ['d4', 'd5', 'c4', 'c6', 'Nf3', 'Nf6', 'Nc3', 'e6'],
+    fen: 'rnbqkb1r/pp3ppp/2p1pn2/3p4/2PP4/2N2N2/PP2PPPP/R1BQKB1R w KQkq - 0 5',
+  },
+  {
+    eco: 'D44',
+    name: 'Semi-Slav Botvinnik',
+    moves: ['d4', 'd5', 'c4', 'c6', 'Nf3', 'Nf6', 'Nc3', 'e6', 'Bg5', 'dxc4', 'e4'],
+    fen: 'rnbqkb1r/pp3ppp/2p1pn2/6B1/2pPP3/2N2N2/PP3PPP/R2QKB1R b KQkq e3 0 6',
+  },
   
-  // Indian Defenses
+  // ==========================================================================
+  // INDIAN DEFENSES (1.d4 Nf6)
+  // ==========================================================================
+  
   {
     eco: 'E60',
     name: "King's Indian Defense",
     moves: ['d4', 'Nf6', 'c4', 'g6'],
     fen: 'rnbqkb1r/pppppp1p/5np1/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq - 0 3',
+  },
+  {
+    eco: 'E62',
+    name: "King's Indian Fianchetto",
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nf3', 'Bg7', 'g3', 'O-O', 'Bg2'],
+    fen: 'rnbq1rk1/ppppppbp/5np1/8/2PP4/5NP1/PP2PPBP/RNBQK2R b KQ - 3 5',
+  },
+  {
+    eco: 'E70',
+    name: "King's Indian Classical",
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7', 'e4', 'd6', 'Nf3'],
+    fen: 'rnbqk2r/ppp1ppbp/3p1np1/8/2PPP3/2N2N2/PP3PPP/R1BQKB1R b KQkq - 1 5',
+  },
+  {
+    eco: 'E73',
+    name: "King's Indian Averbakh",
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7', 'e4', 'd6', 'Be2', 'O-O', 'Bg5'],
+    fen: 'rnbq1rk1/ppp1ppbp/3p1np1/6B1/2PPP3/2N5/PP2BPPP/R2QK1NR b KQ - 3 6',
+  },
+  {
+    eco: 'E80',
+    name: "King's Indian Saemisch",
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'Bg7', 'e4', 'd6', 'f3'],
+    fen: 'rnbqk2r/ppp1ppbp/3p1np1/8/2PPP3/2N2P2/PP4PP/R1BQKBNR b KQkq - 0 5',
   },
   {
     eco: 'E20',
@@ -153,13 +547,82 @@ const NAMED_OPENINGS: Opening[] = [
     fen: 'rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PP2PPPP/R1BQKBNR w KQkq - 2 4',
   },
   {
+    eco: 'E32',
+    name: 'Nimzo-Indian Classical',
+    moves: ['d4', 'Nf6', 'c4', 'e6', 'Nc3', 'Bb4', 'Qc2'],
+    fen: 'rnbqk2r/pppp1ppp/4pn2/8/1bPP4/2N5/PPQ1PPPP/R1B1KBNR b KQkq - 3 4',
+  },
+  {
+    eco: 'E41',
+    name: 'Nimzo-Indian Huebner',
+    moves: ['d4', 'Nf6', 'c4', 'e6', 'Nc3', 'Bb4', 'e3', 'c5', 'Bd3'],
+    fen: 'rnbqk2r/pp1p1ppp/4pn2/2p5/1bPP4/2NBP3/PP3PPP/R1BQK1NR b KQkq - 1 5',
+  },
+  {
     eco: 'E00',
     name: "Queen's Indian Defense",
     moves: ['d4', 'Nf6', 'c4', 'e6', 'Nf3', 'b6'],
     fen: 'rnbqkb1r/p1pp1ppp/1p2pn2/8/2PP4/5N2/PP2PPPP/RNBQKB1R w KQkq - 0 4',
   },
+  {
+    eco: 'E15',
+    name: "Queen's Indian Main Line",
+    moves: ['d4', 'Nf6', 'c4', 'e6', 'Nf3', 'b6', 'g3', 'Bb7', 'Bg2'],
+    fen: 'rn1qkb1r/pbpp1ppp/1p2pn2/8/2PP4/5NP1/PP2PPBP/RNBQK2R b KQkq - 2 5',
+  },
+  {
+    eco: 'A55',
+    name: 'Old Indian Defense',
+    moves: ['d4', 'Nf6', 'c4', 'd6', 'Nc3', 'Nbd7', 'e4', 'e5'],
+    fen: 'r1bqkb1r/pppn1ppp/3p1n2/4p3/2PPP3/2N5/PP3PPP/R1BQKBNR w KQkq e6 0 5',
+  },
+  {
+    eco: 'D70',
+    name: 'Grunfeld Defense',
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'd5'],
+    fen: 'rnbqkb1r/ppp1pp1p/5np1/3p4/2PP4/2N5/PP2PPPP/R1BQKBNR w KQkq d6 0 4',
+  },
+  {
+    eco: 'D85',
+    name: 'Grunfeld Exchange',
+    moves: ['d4', 'Nf6', 'c4', 'g6', 'Nc3', 'd5', 'cxd5', 'Nxd5', 'e4'],
+    fen: 'rnbqkb1r/ppp1pp1p/6p1/3n4/3PP3/2N5/PP3PPP/R1BQKBNR b KQkq e3 0 5',
+  },
+  {
+    eco: 'A45',
+    name: 'Trompowsky Attack',
+    moves: ['d4', 'Nf6', 'Bg5'],
+    fen: 'rnbqkb1r/pppppppp/5n2/6B1/3P4/8/PPP1PPPP/RN1QKBNR b KQkq - 2 2',
+  },
+  {
+    eco: 'D00',
+    name: 'London System',
+    moves: ['d4', 'd5', 'Bf4'],
+    fen: 'rnbqkbnr/ppp1pppp/8/3p4/3P1B2/8/PPP1PPPP/RN1QKBNR b KQkq - 1 2',
+  },
+  {
+    eco: 'D01',
+    name: 'London System Main',
+    moves: ['d4', 'd5', 'Bf4', 'Nf6', 'e3', 'e6', 'Nf3'],
+    fen: 'rnbqkb1r/ppp2ppp/4pn2/3p4/3P1B2/4PN2/PPP2PPP/RN1QKB1R b KQkq - 1 4',
+  },
+  {
+    eco: 'D03',
+    name: 'Torre Attack',
+    moves: ['d4', 'Nf6', 'Nf3', 'e6', 'Bg5'],
+    fen: 'rnbqkb1r/pppp1ppp/4pn2/6B1/3P4/5N2/PPP1PPPP/RN1QKB1R b KQkq - 2 3',
+  },
+  {
+    eco: 'D05',
+    name: 'Colle System',
+    moves: ['d4', 'd5', 'Nf3', 'Nf6', 'e3'],
+    fen: 'rnbqkb1r/ppp1pppp/5n2/3p4/3P4/4PN2/PPP2PPP/RNBQKB1R b KQkq - 0 3',
+  },
   
-  // English Opening
+  // ==========================================================================
+  // FLANK OPENINGS
+  // ==========================================================================
+  
   {
     eco: 'A10',
     name: 'English Opening',
@@ -168,17 +631,63 @@ const NAMED_OPENINGS: Opening[] = [
   },
   {
     eco: 'A20',
-    name: 'English Opening Reversed Sicilian',
+    name: 'English Reversed Sicilian',
     moves: ['c4', 'e5'],
     fen: 'rnbqkbnr/pppp1ppp/8/4p3/2P5/8/PP1PPPPP/RNBQKBNR w KQkq e6 0 2',
   },
-  
-  // London System
   {
-    eco: 'D00',
-    name: 'London System',
-    moves: ['d4', 'd5', 'Bf4'],
-    fen: 'rnbqkbnr/ppp1pppp/8/3p4/3P1B2/8/PPP1PPPP/RN1QKBNR b KQkq - 1 2',
+    eco: 'A30',
+    name: 'English Symmetrical',
+    moves: ['c4', 'c5'],
+    fen: 'rnbqkbnr/pp1ppppp/8/2p5/2P5/8/PP1PPPPP/RNBQKBNR w KQkq c6 0 2',
+  },
+  {
+    eco: 'A15',
+    name: 'English Anglo-Indian',
+    moves: ['c4', 'Nf6'],
+    fen: 'rnbqkb1r/pppppppp/5n2/8/2P5/8/PP1PPPPP/RNBQKBNR w KQkq - 1 2',
+  },
+  {
+    eco: 'A04',
+    name: 'Reti Opening',
+    moves: ['Nf3'],
+    fen: 'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1',
+  },
+  {
+    eco: 'A05',
+    name: 'Reti King\'s Indian Attack',
+    moves: ['Nf3', 'd5', 'g3'],
+    fen: 'rnbqkbnr/ppp1pppp/8/3p4/8/5NP1/PPPPPP1P/RNBQKB1R b KQkq - 0 2',
+  },
+  {
+    eco: 'A06',
+    name: 'Reti Advance',
+    moves: ['Nf3', 'd5', 'c4'],
+    fen: 'rnbqkbnr/ppp1pppp/8/3p4/2P5/5N2/PP1PPPPP/RNBQKB1R b KQkq c3 0 2',
+  },
+  {
+    eco: 'A00',
+    name: 'Bird Opening',
+    moves: ['f4'],
+    fen: 'rnbqkbnr/pppppppp/8/8/5P2/8/PPPPP1PP/RNBQKBNR b KQkq f3 0 1',
+  },
+  {
+    eco: 'A02',
+    name: 'Bird From\'s Gambit',
+    moves: ['f4', 'e5'],
+    fen: 'rnbqkbnr/pppp1ppp/8/4p3/5P2/8/PPPPP1PP/RNBQKBNR w KQkq e6 0 2',
+  },
+  {
+    eco: 'E61',
+    name: 'Catalan Opening',
+    moves: ['d4', 'Nf6', 'c4', 'e6', 'g3'],
+    fen: 'rnbqkb1r/pppp1ppp/4pn2/8/2PP4/6P1/PP2PP1P/RNBQKBNR b KQkq - 0 3',
+  },
+  {
+    eco: 'E04',
+    name: 'Catalan Open',
+    moves: ['d4', 'Nf6', 'c4', 'e6', 'g3', 'd5', 'Bg2', 'dxc4'],
+    fen: 'rnbqkb1r/ppp2ppp/4pn2/8/2pP4/6P1/PP2PPBP/RNBQK1NR w KQkq - 0 5',
   },
 ];
 

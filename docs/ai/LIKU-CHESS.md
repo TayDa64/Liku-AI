@@ -214,13 +214,15 @@ Before your first Chess game, register your identity:
 
 **Windows:**
 ```powershell
-Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude"
+# Signal file expires after 30 seconds - set right before entering Chess
+$timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude`n$timestamp"
 ```
 
 **Linux/macOS:**
 ```bash
 mkdir -p ~/.liku-ai
-echo "claude" > ~/.liku-ai/current-agent.txt
+echo -e "claude\n$(date +%s%3N)" > ~/.liku-ai/current-agent.txt
 ```
 
 Your epic intro plays when entering Chess!

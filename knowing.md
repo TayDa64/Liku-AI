@@ -260,12 +260,15 @@ The system detects which AI agent is playing using three methods in priority ord
 ```powershell
 # AI must run this BEFORE navigating to Chess
 # Any of these work (case-insensitive):
+# Format: Line 1 = agent ID, Line 2 = timestamp (ms)
+# Signal files expire after 30 seconds to prevent stale detection
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.liku-ai" | Out-Null
-Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "gemini"
+$timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "gemini`n$timestamp"
 # OR: "google", "gemini-2.5-flash", "bard", "GEMINI-FLASH", etc.
 ```
 
-The Chess component reads this file on mount and plays the appropriate intro.
+The Chess component reads this file on mount and plays the appropriate intro. **Signal files older than 30 seconds are ignored** to prevent stale agent detection from previous sessions.
 
 ### Video Playback Implementation
 
@@ -282,6 +285,7 @@ spawn('cmd', ['/c', `timeout /t ${seconds} /nobreak >nul && powershell -Command 
   windowsHide: true,
 });
 ```
+
 
 **Why This Pattern?**
 - `exec()` alone: Works for launching but can't reliably schedule close

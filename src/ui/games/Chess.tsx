@@ -462,6 +462,7 @@ const Chess: React.FC<ChessProps> = ({
       const turnIndicator = isPlayerTurn ? '>>> YOUR TURN <<<' : '(AI thinking...)';
       
       let status = customStatus || `${turnStr} to move ${turnIndicator}`;
+      if (error) status += ` - ERROR: ${error}`;
       if (currentState.isCheckmate) status = `CHECKMATE! ${turnStr} loses.`;
       else if (currentState.isStalemate) status = 'STALEMATE - Draw';
       else if (currentState.isDraw) status = `DRAW: ${currentState.drawReason}`;
@@ -520,7 +521,7 @@ const Chess: React.FC<ChessProps> = ({
       const errorMessage = err instanceof Error ? err.message : String(err);
       logGameState('Playing Chess (Error)', `Error: ${errorMessage}`, 'Board unavailable', 'Esc: exit');
     }
-  }, [engine, evaluator, playerColor, difficulty, inputMode]);
+  }, [engine, evaluator, playerColor, difficulty, inputMode, error]);
 
   // Get legal moves for square
   const getLegalTargets = useCallback((sq: string): Set<string> => {
@@ -711,7 +712,7 @@ const Chess: React.FC<ChessProps> = ({
       // Also log to console for developer visibility
       // console.error('Chess state logging error:', err);
     }
-  }, [gameState, evaluation, thinking, engine, playerColor, difficulty, inputMode, cursorRow, cursorCol]);
+  }, [gameState, evaluation, thinking, engine, playerColor, difficulty, inputMode, cursorRow, cursorCol, error]);
   // ==========================================================================
 
   // Cursor selection
@@ -1016,9 +1017,31 @@ const Chess: React.FC<ChessProps> = ({
       }
     };
 
+    const handleWsText = (text: string) => {
+      // Automatically switch to text mode if receiving text command
+      if (inputMode === 'cursor') {
+        setInputMode('text');
+      }
+      handleTextSubmit(text);
+    };
+
+    const handleWsAction = (action: any) => {
+      if (action.type === 'chess_move' && action.move) {
+        if (inputMode === 'cursor') {
+          setInputMode('text');
+        }
+        handleTextSubmit(action.move);
+      }
+    };
+
     commandBridge.on('key', handleWsKey);
+    commandBridge.on('text', handleWsText);
+    commandBridge.on('action', handleWsAction);
+
     return () => {
       commandBridge.off('key', handleWsKey);
+      commandBridge.off('text', handleWsText);
+      commandBridge.off('action', handleWsAction);
     };
   }, [flipped, inputMode, cursorState, moveInput, handleCursorAction, handleTextSubmit, handleHint, handleUndo, handleNew, onExit]);
 

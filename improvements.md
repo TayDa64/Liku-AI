@@ -185,6 +185,23 @@ export function verifyToken(token: string, secret: string): { valid: boolean; ag
 
 ---
 
+## Phase 1.5: Usability & Grounding (Completed)
+
+### 1.5.1 Text Mode Input
+- **Problem**: AI agents had to send single characters, making moves like "e4" difficult.
+- **Solution**: Implemented `text` command type in WebSocket protocol and CLI.
+- **Status**: ✅ Done (Dec 14, 2025)
+
+### 1.5.2 Session Awareness
+- **Problem**: AI agents couldn't easily identify or target specific sessions.
+- **Solution**: Added `session` query and `--session` flag to CLI.
+- **Status**: ✅ Done (Dec 14, 2025)
+
+### 1.5.3 Improved Feedback
+- **Problem**: Generic error messages and lack of "thinking" state.
+- **Solution**: Enhanced `Chess.tsx` to log specific errors and immediate state updates.
+- **Status**: ✅ Done (Dec 14, 2025)
+
 ## Phase 2: Chess Engine Enhancements (2-4 weeks)
 
 ### 2.1 Fix Zobrist Hashing (CRITICAL)

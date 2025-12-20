@@ -19,13 +19,21 @@
  *   Gemini/Google:    gemini-3, gemini-2.5-flash, gemini-flash, gemini, google, bard
  *   ChatGPT/OpenAI:   chatgpt-5.1, gpt-5.1, gpt-5, chatgpt, openai, gpt-4o, gpt4o
  *   Grok/xAI:         grok-4.1, grok-4, grok, xai, x-ai
+ * 
+ * Signal File Format (v2 - with timestamp):
+ *   Line 1: agent ID (e.g., "gemini")
+ *   Line 2: timestamp in ms (e.g., "1704067200000")
+ *   Signal files older than 30 seconds are considered stale.
  */
 
 import { spawn, exec, execSync } from 'child_process';
 import { platform } from 'os';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, statSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+// Signal file staleness threshold (30 seconds)
+const SIGNAL_FILE_TTL_MS = 30 * 1000;
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -235,6 +243,54 @@ export function getSupportedAliases(): Record<string, string[]> {
 }
 
 /**
+ * Set the current agent signal file.
+ * AI clients should call this before launching the game to identify themselves.
+ * The signal file includes a timestamp and expires after SIGNAL_FILE_TTL_MS.
+ * 
+ * @param agentId - Agent identifier (supports aliases)
+ * @returns true if signal file was written successfully
+ */
+export function setAgentSignal(agentId: string): boolean {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  const likuDir = path.join(homeDir, '.liku-ai');
+  const signalFile = path.join(likuDir, 'current-agent.txt');
+  
+  try {
+    // Ensure .liku-ai directory exists
+    if (!existsSync(likuDir)) {
+      mkdirSync(likuDir, { recursive: true });
+    }
+    
+    // Write agent ID and timestamp
+    const content = `${agentId}\n${Date.now()}`;
+    writeFileSync(signalFile, content, 'utf-8');
+    console.log(`[Intro] Agent signal set: ${agentId}`);
+    return true;
+  } catch (err) {
+    console.log(`[Intro] Failed to set agent signal: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Clear the agent signal file.
+ * Called on app exit to prevent stale agent detection.
+ */
+export function clearAgentSignal(): void {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  const signalFile = path.join(homeDir, '.liku-ai', 'current-agent.txt');
+  
+  try {
+    if (existsSync(signalFile)) {
+      unlinkSync(signalFile);
+      console.log(`[Intro] Agent signal cleared`);
+    }
+  } catch {
+    // Ignore errors
+  }
+}
+
+/**
  * Detect which AI agent is playing.
  * Checks in priority order:
  *   1. LIKU_AI_PLAYER environment variable
@@ -274,17 +330,38 @@ export function detectAgent(): AIAgent | null {
   }
 
   // 3. Check signal file (for cross-terminal scenarios)
+  // Signal file format v2: Line 1 = agent ID, Line 2 = timestamp (ms)
+  // Signal files older than SIGNAL_FILE_TTL_MS are considered stale
   const homeDir = process.env.HOME || process.env.USERPROFILE || '';
   const signalFile = path.join(homeDir, '.liku-ai', 'current-agent.txt');
   if (existsSync(signalFile)) {
     try {
       const fileContent = readFileSync(signalFile, 'utf-8').trim();
-      const fromFile = tryResolve(fileContent);
-      if (fromFile) {
-        console.log(`[Intro] Agent detected from signal file "${fileContent}" → ${fromFile.id}`);
-        return fromFile;
+      const lines = fileContent.split('\n');
+      const agentId = lines[0]?.trim();
+      const timestamp = parseInt(lines[1]?.trim() || '0', 10);
+      
+      // Check if signal file is stale (older than TTL or no timestamp)
+      const now = Date.now();
+      const age = now - timestamp;
+      
+      if (!timestamp || age > SIGNAL_FILE_TTL_MS) {
+        // Stale signal file - delete it and ignore
+        console.log(`[Intro] Signal file is stale (age: ${Math.round(age / 1000)}s), ignoring`);
+        try {
+          unlinkSync(signalFile);
+        } catch {
+          // Ignore delete errors
+        }
       } else {
-        console.log(`[Intro] Unknown agent in signal file: "${fileContent}"`);
+        // Fresh signal file - use it
+        const fromFile = tryResolve(agentId);
+        if (fromFile) {
+          console.log(`[Intro] Agent detected from signal file "${agentId}" → ${fromFile.id}`);
+          return fromFile;
+        } else {
+          console.log(`[Intro] Unknown agent in signal file: "${agentId}"`);
+        }
       }
     } catch {
       // Ignore read errors

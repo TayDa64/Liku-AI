@@ -21,6 +21,7 @@ import {
   Color,
   DEFAULT_SEARCH_CONFIG,
   Move,
+  MultiPVResult,
   PieceType,
   SearchConfig,
   SearchResult,
@@ -46,6 +47,150 @@ const MVV_VALUES: Record<PieceType, number> = {
 const LVA_VALUES: Record<PieceType, number> = {
   p: 6, n: 5, b: 5, r: 4, q: 3, k: 2,
 };
+
+/** SEE piece values (centipawns) */
+const SEE_VALUES: Record<PieceType, number> = {
+  p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000,
+};
+
+// =============================================================================
+// Static Exchange Evaluation (SEE)
+// =============================================================================
+
+/**
+ * Static Exchange Evaluation - Evaluates if a capture sequence wins material
+ * Returns the expected material gain/loss from the capture sequence
+ * @param chess - Chess instance with current position
+ * @param move - The capture move to evaluate
+ * @returns Score in centipawns (positive = winning capture)
+ */
+function staticExchangeEvaluation(chess: Chess, move: ChessJsMove): number {
+  if (!move.captured) return 0;
+  
+  const targetSquare = move.to;
+  const board = chess.board();
+  
+  // Get file and rank indices (0-7)
+  const toFile = targetSquare.charCodeAt(0) - 97;
+  const toRank = 8 - parseInt(targetSquare[1], 10);
+  
+  // Initial gain is the value of captured piece
+  let gain = SEE_VALUES[move.captured as PieceType];
+  
+  // The piece that just moved is now on the target square and can be recaptured
+  let pieceOnSquare = move.piece as PieceType;
+  let sideToMove = move.color === 'w' ? 'b' : 'w';
+  
+  // Simple approximation: alternate captures until no more attackers
+  // We use a gains array to track material swings
+  const gains: number[] = [gain];
+  let depth = 0;
+  const MAX_SEE_DEPTH = 16;
+  
+  // Find all attackers to the square for both sides
+  const getSmallestAttacker = (sq: string, color: 'w' | 'b'): PieceType | null => {
+    // Check for pawn attackers
+    const pawnDir = color === 'w' ? 1 : -1;
+    const pawnRank = toRank + pawnDir;
+    if (pawnRank >= 0 && pawnRank < 8) {
+      for (const fileOffset of [-1, 1]) {
+        const pawnFile = toFile + fileOffset;
+        if (pawnFile >= 0 && pawnFile < 8) {
+          const piece = board[pawnRank][pawnFile];
+          if (piece && piece.type === 'p' && piece.color === color) {
+            return 'p';
+          }
+        }
+      }
+    }
+    
+    // Check for knight attackers
+    const knightOffsets = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+    for (const [dr, df] of knightOffsets) {
+      const r = toRank + dr;
+      const f = toFile + df;
+      if (r >= 0 && r < 8 && f >= 0 && f < 8) {
+        const piece = board[r][f];
+        if (piece && piece.type === 'n' && piece.color === color) {
+          return 'n';
+        }
+      }
+    }
+    
+    // Check for bishop/queen diagonal attackers
+    for (const [dr, df] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+      for (let dist = 1; dist < 8; dist++) {
+        const r = toRank + dr * dist;
+        const f = toFile + df * dist;
+        if (r < 0 || r > 7 || f < 0 || f > 7) break;
+        const piece = board[r][f];
+        if (piece) {
+          if (piece.color === color && (piece.type === 'b' || piece.type === 'q')) {
+            return piece.type;
+          }
+          break; // Blocked
+        }
+      }
+    }
+    
+    // Check for rook/queen straight attackers
+    for (const [dr, df] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+      for (let dist = 1; dist < 8; dist++) {
+        const r = toRank + dr * dist;
+        const f = toFile + df * dist;
+        if (r < 0 || r > 7 || f < 0 || f > 7) break;
+        const piece = board[r][f];
+        if (piece) {
+          if (piece.color === color && (piece.type === 'r' || piece.type === 'q')) {
+            return piece.type;
+          }
+          break; // Blocked
+        }
+      }
+    }
+    
+    // Check for king attacker (only if adjacent)
+    for (const dr of [-1, 0, 1]) {
+      for (const df of [-1, 0, 1]) {
+        if (dr === 0 && df === 0) continue;
+        const r = toRank + dr;
+        const f = toFile + df;
+        if (r >= 0 && r < 8 && f >= 0 && f < 8) {
+          const piece = board[r][f];
+          if (piece && piece.type === 'k' && piece.color === color) {
+            return 'k';
+          }
+        }
+      }
+    }
+    
+    return null;
+  };
+  
+  // Simulate the exchange
+  while (depth < MAX_SEE_DEPTH) {
+    const attacker = getSmallestAttacker(targetSquare, sideToMove as 'w' | 'b');
+    if (!attacker) break;
+    
+    // Add the recapture
+    depth++;
+    gains[depth] = SEE_VALUES[pieceOnSquare] - gains[depth - 1];
+    
+    // If the side to move can't improve, they won't recapture
+    if (Math.max(-gains[depth - 1], gains[depth]) < 0) break;
+    
+    pieceOnSquare = attacker;
+    sideToMove = sideToMove === 'w' ? 'b' : 'w';
+  }
+  
+  // Negamax the gains to find final score
+  while (depth > 0) {
+    gains[depth - 1] = -Math.max(-gains[depth - 1], gains[depth]);
+    depth--;
+  }
+  
+  return gains[0];
+}
 
 // =============================================================================
 // Transposition Table (Bucket-Based)
@@ -211,6 +356,13 @@ export class ChessSearch {
   // History heuristic
   private history: Map<string, number> = new Map();
   
+  // Counter-move heuristic: best response to opponent's last move
+  // Key: "fromSquare-toSquare", Value: counter move in SAN
+  private counterMoves: Map<string, string> = new Map();
+  
+  // Track the last move made (for counter-move heuristic)
+  private lastMove: ChessJsMove | null = null;
+  
   // Search stats
   private stats: SearchStats = this.initStats();
   
@@ -259,8 +411,9 @@ export class ChessSearch {
     
     const depth = maxDepth ?? this.config.maxDepth;
     
-    // Clear history at start of new search
+    // Clear history at start of new search (but keep counter-moves across searches)
     this.history.clear();
+    this.lastMove = null;
     
     let bestMove = '';
     let bestScore = -INFINITY;
@@ -350,6 +503,7 @@ export class ChessSearch {
       aborted: this.stopSearch,
       hashFull: this.tt.getHashFull(),
       nps: elapsed > 0 ? Math.round((this.stats.nodes / elapsed) * 1000) : 0,
+      ponderMove: pv.length >= 2 ? pv[1] : undefined,
     };
   }
 
@@ -521,6 +675,10 @@ export class ChessSearch {
       this.chess.move(move.san);
       let score: number;
       
+      // Track this move for counter-move heuristic in child nodes
+      const prevLastMove = this.lastMove;
+      this.lastMove = move;
+      
       try {
         // PVS: Search first move with full window, others with null window
         if (movesSearched === 0) {
@@ -544,6 +702,7 @@ export class ChessSearch {
         }
       } finally {
         this.chess.undo();
+        this.lastMove = prevLastMove; // Restore previous move
       }
       
       if (this.stopSearch) return 0;
@@ -565,10 +724,11 @@ export class ChessSearch {
           if (score >= beta) {
             this.stats.betaCutoffs++;
             
-            // Update killers for quiet moves
+            // Update killers and counter-move for quiet moves
             if (!move.captured) {
               this.updateKillers(move.san, ply);
               this.updateHistory(move, depth);
+              this.updateCounterMove(move);
             }
             
             break;
@@ -598,6 +758,12 @@ export class ChessSearch {
    * Quiescence search - search captures until position is quiet
    */
   private quiescence(alpha: number, beta: number, ply: number): number {
+    // Check time
+    if (this.shouldStop()) {
+      this.stopSearch = true;
+      return 0;
+    }
+
     this.stats.qNodes++;
     
     if (ply > this.stats.seldepth) {
@@ -626,16 +792,26 @@ export class ChessSearch {
     const allMoves = this.chess.moves({ verbose: true }) as ChessJsMove[];
     const captures = allMoves.filter(m => m.captured);
     
-    // Order captures by MVV-LVA
-    captures.sort((a, b) => this.mvvLva(b) - this.mvvLva(a));
+    // Order captures by SEE score (better than MVV-LVA alone)
+    const scoredCaptures = captures.map(move => ({
+      move,
+      see: staticExchangeEvaluation(this.chess, move),
+    }));
+    scoredCaptures.sort((a, b) => b.see - a.see);
     
-    for (const move of captures) {
+    for (const { move, see } of scoredCaptures) {
       // Ensure position is correct before making move
       if (this.chess.fen() !== currentFen) {
         this.chess.load(currentFen);
       }
       
-      // Delta pruning - skip captures that can't improve alpha
+      // SEE pruning - skip captures that lose material (more accurate than delta)
+      if (see < 0) {
+        this.stats.seePrunes++;
+        continue;
+      }
+      
+      // Delta pruning - skip captures that can't improve alpha even if winning
       const captureValue = MVV_VALUES[move.captured as PieceType] * 100;
       if (standPat + captureValue + 200 < alpha) {
         continue;
@@ -662,9 +838,13 @@ export class ChessSearch {
 
   /**
    * Order moves for better pruning
+   * Priority: TT move > Good captures (SEE >= 0) > Killers > Counter-move > History > Bad captures
    */
   private orderMoves(moves: ChessJsMove[], ply: number, ttMove: string | null): ChessJsMove[] {
     const scored: Array<{ move: ChessJsMove; score: number }> = [];
+    
+    // Get counter-move for current position
+    const counterMove = this.getCounterMove();
     
     for (const move of moves) {
       let score = 0;
@@ -673,26 +853,42 @@ export class ChessSearch {
       if (ttMove && move.san === ttMove) {
         score = 10000000;
       }
-      // Captures: MVV-LVA
+      // Captures: Use SEE to distinguish good from bad captures
       else if (move.captured) {
-        score = 1000000 + this.mvvLva(move);
+        const seeScore = staticExchangeEvaluation(this.chess, move);
+        if (seeScore >= 0) {
+          // Good capture (wins or equal material)
+          score = 2000000 + seeScore + this.mvvLva(move);
+        } else {
+          // Bad capture (loses material) - try after quiet moves
+          score = -100000 + seeScore + this.mvvLva(move);
+        }
       }
       // Promotions
       else if (move.promotion) {
         const promoValue = MVV_VALUES[move.promotion as PieceType];
-        score = 900000 + promoValue * 100;
+        score = 1900000 + promoValue * 100;
       }
       // Killer moves
       else if (this.config.useKillerMoves) {
         if (this.killers[ply][0] === move.san) {
-          score = 800000;
+          score = 900000;
         } else if (this.killers[ply][1] === move.san) {
-          score = 700000;
+          score = 800000;
         }
+        // Counter-move heuristic (after killers, before history)
+        else if (counterMove && move.san === counterMove) {
+          score = 700000;
+          this.stats.counterMoveHits++;
+        }
+      } else if (counterMove && move.san === counterMove) {
+        // Counter-move even if killers disabled
+        score = 700000;
+        this.stats.counterMoveHits++;
       }
       
-      // History heuristic
-      if (this.config.useHistoryHeuristic && score < 700000) {
+      // History heuristic for quiet moves
+      if (this.config.useHistoryHeuristic && score < 700000 && score >= 0) {
         const historyKey = `${move.from}${move.to}`;
         score += this.history.get(historyKey) || 0;
       }
@@ -736,6 +932,33 @@ export class ChessSearch {
   }
 
   /**
+   * Update counter-move table
+   * Stores the best response to the opponent's previous move
+   */
+  private updateCounterMove(move: ChessJsMove): void {
+    if (this.lastMove) {
+      const key = `${this.lastMove.from}-${this.lastMove.to}`;
+      this.counterMoves.set(key, move.san);
+    }
+  }
+
+  /**
+   * Get counter-move for opponent's last move
+   */
+  private getCounterMove(): string | null {
+    if (!this.lastMove) return null;
+    const key = `${this.lastMove.from}-${this.lastMove.to}`;
+    return this.counterMoves.get(key) || null;
+  }
+
+  /**
+   * Clear counter-move table (call between games, not between searches)
+   */
+  clearCounterMoves(): void {
+    this.counterMoves.clear();
+  }
+
+  /**
    * Check if position has non-pawn material (for null move pruning)
    */
   private hasNonPawnMaterial(): boolean {
@@ -758,8 +981,8 @@ export class ChessSearch {
   private shouldStop(): boolean {
     if (this.stopSearch) return true;
     
-    // Check time every 1024 nodes
-    if (this.stats.nodes % 1024 === 0) {
+    // Check time every 1024 nodes (regular or quiescence)
+    if ((this.stats.nodes + this.stats.qNodes) % 1024 === 0) {
       const elapsed = Date.now() - this.searchStartTime;
       if (elapsed >= this.timeLimit) {
         return true;
@@ -786,6 +1009,8 @@ export class ChessSearch {
       futilityPrunes: 0,
       lmrReductions: 0,
       qNodes: 0,
+      seePrunes: 0,
+      counterMoveHits: 0,
     };
   }
 
@@ -829,6 +1054,210 @@ export class ChessSearch {
    */
   setConfig(config: Partial<SearchConfig>): void {
     this.config = { ...this.config, ...config };
+  }
+
+  /**
+   * Multi-PV search - returns multiple best lines for analysis
+   * @param fen - Position to search
+   * @param numPVs - Number of principal variations to find (default: 3)
+   * @param maxDepth - Optional depth override
+   * @param maxTime - Optional time limit override (ms)
+   */
+  searchMultiPV(
+    fen: string,
+    numPVs: number = 3,
+    maxDepth?: number,
+    maxTime?: number
+  ): MultiPVResult {
+    this.chess.load(fen);
+    const legalMoves = this.chess.moves();
+    
+    // Can't return more PVs than legal moves
+    numPVs = Math.min(numPVs, legalMoves.length);
+    
+    if (numPVs === 0) {
+      return {
+        lines: [],
+        depth: 0,
+        seldepth: 0,
+        nodes: 0,
+        time: 0,
+        aborted: false,
+        hashFull: 0,
+        nps: 0,
+      };
+    }
+    
+    const startTime = Date.now();
+    const lines: Array<{ pv: string[]; score: number; rank: number }> = [];
+    const excludeMoves: Set<string> = new Set();
+    let totalNodes = 0;
+    let maxSeldepth = 0;
+    let finalDepth = 0;
+    let wasAborted = false;
+    
+    // Search for each PV by excluding previous best moves
+    for (let pvNum = 1; pvNum <= numPVs; pvNum++) {
+      // Adjust time allocation: first PV gets most time, later PVs less
+      const timeForThisPV = Math.max(
+        100,
+        ((maxTime ?? this.config.maxTime) * (numPVs - pvNum + 1)) / (numPVs * 1.5)
+      );
+      
+      const result = this.searchWithExclusions(
+        fen,
+        excludeMoves,
+        maxDepth,
+        timeForThisPV
+      );
+      
+      if (result.bestMove) {
+        lines.push({
+          pv: result.pv,
+          score: result.score,
+          rank: pvNum,
+        });
+        excludeMoves.add(result.bestMove);
+        totalNodes += result.nodes;
+        maxSeldepth = Math.max(maxSeldepth, result.seldepth);
+        finalDepth = Math.max(finalDepth, result.depth);
+        
+        if (result.aborted) {
+          wasAborted = true;
+          break;
+        }
+      } else {
+        break; // No more valid moves
+      }
+    }
+    
+    const elapsed = Date.now() - startTime;
+    
+    return {
+      lines,
+      depth: finalDepth,
+      seldepth: maxSeldepth,
+      nodes: totalNodes,
+      time: elapsed,
+      aborted: wasAborted,
+      hashFull: this.tt.getHashFull(),
+      nps: elapsed > 0 ? Math.round((totalNodes / elapsed) * 1000) : 0,
+    };
+  }
+
+  /**
+   * Search with excluded moves (helper for Multi-PV)
+   */
+  private searchWithExclusions(
+    fen: string,
+    excludeMoves: Set<string>,
+    maxDepth?: number,
+    maxTime?: number
+  ): SearchResult {
+    this.chess.load(fen);
+    this.stats = this.initStats();
+    this.stopSearch = false;
+    this.searchStartTime = Date.now();
+    this.timeLimit = maxTime ?? this.config.maxTime;
+    
+    const depth = maxDepth ?? this.config.maxDepth;
+    
+    let bestMove = '';
+    let bestScore = -INFINITY;
+    let completedDepth = 0;
+    let pv: string[] = [];
+    
+    // Get legal moves excluding specified ones
+    const verboseMoves = this.chess.moves({ verbose: true }) as ChessJsMove[];
+    const filteredMoves = verboseMoves.filter(m => !excludeMoves.has(m.san));
+    
+    if (filteredMoves.length === 0) {
+      return {
+        bestMove: '',
+        score: 0,
+        depth: 0,
+        seldepth: 0,
+        nodes: 0,
+        time: 0,
+        pv: [],
+        aborted: false,
+        hashFull: 0,
+        nps: 0,
+      };
+    }
+    
+    // Iterative deepening with root move restriction
+    for (let d = 1; d <= depth; d++) {
+      for (let i = 0; i < 64; i++) {
+        this.pvLength[i] = 0;
+      }
+      
+      let alpha = -INFINITY;
+      let beta = INFINITY;
+      
+      if (this.config.useAspirationWindows && d > 4 && bestScore !== -INFINITY) {
+        alpha = bestScore - 50;
+        beta = bestScore + 50;
+      }
+      
+      let iterBestScore = -INFINITY;
+      let iterBestMove = '';
+      
+      for (const move of filteredMoves) {
+        this.chess.load(fen);
+        this.chess.move(move.san);
+        
+        const prevLastMove = this.lastMove;
+        this.lastMove = move;
+        
+        let score: number;
+        try {
+          score = -this.alphaBeta(d - 1, -beta, -alpha, true, 1);
+        } finally {
+          this.chess.undo();
+          this.lastMove = prevLastMove;
+        }
+        
+        if (this.stopSearch) break;
+        
+        if (score > iterBestScore) {
+          iterBestScore = score;
+          iterBestMove = move.san;
+          
+          if (score > alpha) {
+            alpha = score;
+            
+            // Build PV starting with this move
+            pv = [move.san, ...this.pvTable[1].slice(0, this.pvLength[1])];
+          }
+        }
+      }
+      
+      if (this.stopSearch && completedDepth > 0) break;
+      
+      if (iterBestMove) {
+        bestMove = iterBestMove;
+        bestScore = iterBestScore;
+        completedDepth = d;
+      }
+      
+      if (Math.abs(bestScore) > MATE_THRESHOLD) break;
+    }
+    
+    const elapsed = Date.now() - this.searchStartTime;
+    
+    return {
+      bestMove,
+      score: bestScore,
+      depth: completedDepth,
+      seldepth: this.stats.seldepth,
+      nodes: this.stats.nodes,
+      time: elapsed,
+      pv,
+      aborted: this.stopSearch,
+      hashFull: this.tt.getHashFull(),
+      nps: elapsed > 0 ? Math.round((this.stats.nodes / elapsed) * 1000) : 0,
+    };
   }
 }
 
