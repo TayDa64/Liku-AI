@@ -8,7 +8,7 @@
 
 ```powershell
 # 1. Spawn game in separate window (REQUIRED)
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; node dist/index.js"
+Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; `$env:LIKU_SAFE_LAUNCH='1'; node dist/index.js"
 
 # 2. Read state file to see current screen
 Get-Content .\likubuddy-state.txt
@@ -53,7 +53,7 @@ node send-command.js --key enter
 ### 🪟 Windows
 
 ```powershell
-Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; node dist/index.js"
+Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; `$env:LIKU_SAFE_LAUNCH='1'; node dist/index.js"
 ```
 
 This spawns a window titled "LikuBuddy Game Window". All `send-keys.ps1` commands auto-target this window.
@@ -174,7 +174,7 @@ Register your identity before playing Chess to trigger your intro video:
 
 **Windows:**
 ```powershell
-# Signal file format: Line 1 = agent ID, Line 2 = timestamp (expires after 30s)
+# Signal file format: Line 1 = agent ID, Line 2 = timestamp (expires after 60s)
 New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.liku-ai" | Out-Null
 $timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude`n$timestamp"
@@ -182,14 +182,14 @@ Set-Content -Path "$env:USERPROFILE\.liku-ai\current-agent.txt" -Value "claude`n
 
 **Linux/macOS:**
 ```bash
-# Signal file format: Line 1 = agent ID, Line 2 = timestamp (expires after 30s)
+# Signal file format: Line 1 = agent ID, Line 2 = timestamp (expires after 60s)
 mkdir -p ~/.liku-ai
 echo -e "claude\n$(date +%s%3N)" > ~/.liku-ai/current-agent.txt
 ```
 
 **Supported IDs:** `claude`, `gemini`, `chatgpt`, `grok` (and aliases like `anthropic`, `openai`, `google`, etc.)
 
-> **Note:** Signal files expire after 30 seconds to prevent stale agent detection from previous sessions.
+> **Note:** Signal files expire after 60 seconds to prevent stale agent detection from previous sessions.
 
 ### ⏳ Intro Video Handling (CRITICAL)
 

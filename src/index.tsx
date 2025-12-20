@@ -123,28 +123,33 @@ const checkAISafetyPreFlight = (): boolean => {
   // Skip check if --ai flag is set (agent knows what it's doing)
   if (cli.flags.ai) return true;
   
-  // Skip check if explicitly disabled
+  // Skip check if explicitly disabled (used by Start-Process command)
   if (process.env.LIKU_SKIP_SAFETY_CHECK === '1') return true;
   
+  // Skip if LIKU_SAFE_LAUNCH is set (inherited doesn't matter)
+  if (process.env.LIKU_SAFE_LAUNCH === '1') return true;
+  
   // Check for VS Code integrated terminal indicators
-  const isVSCodeTerminal = !!(
+  // Note: Start-Process inherits env vars, so we need additional checks
+  const hasVSCodeEnv = !!(
     process.env.VSCODE_INJECTION ||
     process.env.TERM_PROGRAM === 'vscode' ||
     process.env.VSCODE_GIT_IPC_HANDLE ||
     process.env.VSCODE_PID
   );
   
-  // Check for GitHub Copilot / AI tool indicators
-  const isLikelyAISession = !!(
-    process.env.GITHUB_COPILOT_AGENT ||
-    process.env.CURSOR_SESSION ||
-    process.env.AIDER_SESSION ||
-    // Parent process check for AI tools running terminal commands
-    process.ppid && process.env.VSCODE_PID
+  // Check if this is truly an inline terminal (not spawned via Start-Process)
+  // Start-Process creates a new console window, which has different characteristics
+  const isInteractiveVSCodeTerminal = hasVSCodeEnv && (
+    // Check if we're in the VS Code pseudo-terminal (PTY)
+    process.env.TERM_PROGRAM === 'vscode' ||
+    // Check for VS Code injection (extension host)
+    process.env.VSCODE_INJECTION === '1'
   );
   
-  // If in VS Code terminal AND looks like AI session, warn and exit
-  if (isVSCodeTerminal) {
+  // If in VS Code's interactive terminal, warn and exit
+  if (isInteractiveVSCodeTerminal) {
+    const cwd = process.cwd().replace(/\\/g, '/');
     console.log(`
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                    ⚠️  LIKU-AI SAFETY CHECK  ⚠️                        ║
@@ -159,11 +164,9 @@ const checkAISafetyPreFlight = (): boolean => {
 ║  CORRECT LAUNCH METHOD (Windows PowerShell):                        ║
 ║                                                                      ║
 ║    Start-Process pwsh -ArgumentList "-NoExit", "-Command",          ║
-║      "cd ${process.cwd().replace(/\\/g, '/')}; node dist/index.js"                         ║
+║      "cd ${cwd}; \`$env:LIKU_SAFE_LAUNCH='1'; node dist/index.js"   ║
 ║                                                                      ║
-║  To bypass this check (humans only):                                ║
-║    - Set LIKU_SKIP_SAFETY_CHECK=1 environment variable              ║
-║    - Or run with: node dist/index.js --ai                           ║
+║  To bypass (experienced users): node dist/index.js --ai             ║
 ║                                                                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 `);

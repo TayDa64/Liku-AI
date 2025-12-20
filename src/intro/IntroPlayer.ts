@@ -32,8 +32,8 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync, statSyn
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// Signal file staleness threshold (30 seconds)
-const SIGNAL_FILE_TTL_MS = 30 * 1000;
+// Signal file staleness threshold (60 seconds - allows time for menu navigation)
+const SIGNAL_FILE_TTL_MS = 60 * 1000;
 
 // ES module __dirname equivalent
 const __filename = fileURLToPath(import.meta.url);
@@ -334,6 +334,7 @@ export function detectAgent(): AIAgent | null {
   // Signal files older than SIGNAL_FILE_TTL_MS are considered stale
   const homeDir = process.env.HOME || process.env.USERPROFILE || '';
   const signalFile = path.join(homeDir, '.liku-ai', 'current-agent.txt');
+  
   if (existsSync(signalFile)) {
     try {
       const fileContent = readFileSync(signalFile, 'utf-8').trim();
@@ -375,7 +376,9 @@ export function detectAgent(): AIAgent | null {
  * Get the absolute path to an intro video
  */
 function getIntroVideoPath(agent: AIAgent): string | null {
-  const projectRoot = path.resolve(__dirname, '..', '..');
+  // __dirname is dist/intro/ when compiled, so go up to dist/, then to project root
+  // Or use process.cwd() which is more reliable for project root
+  const projectRoot = process.cwd();
   
   // Try MP4 first, then GIF
   const mp4Path = path.join(projectRoot, agent.introVideo);
@@ -389,6 +392,14 @@ function getIntroVideoPath(agent: AIAgent): string | null {
     return gifPath;
   }
   
+  // Fallback: Try relative to __dirname (for backward compatibility)
+  const fallbackRoot = path.resolve(__dirname, '..', '..');
+  const fallbackPath = path.join(fallbackRoot, agent.introVideo);
+  if (existsSync(fallbackPath)) {
+    return fallbackPath;
+  }
+  
+  console.log(`[Intro] Video not found: ${mp4Path} or ${fallbackPath}`);
   return null;
 }
 
@@ -397,14 +408,30 @@ function getIntroVideoPath(agent: AIAgent): string | null {
  * Returns the process info for state file notification
  */
 export function playIntroVideo(agent: AIAgent): { pid: number | null; duration: number } {
+  // Debug log helper
+  const debugLog = (msg: string) => {
+    try {
+      const line = `[${new Date().toISOString()}] [playIntroVideo] ${msg}\n`;
+      const debugPath = path.join(process.cwd(), 'intro-debug.txt');
+      const existing = existsSync(debugPath) ? readFileSync(debugPath, 'utf-8') : '';
+      writeFileSync(debugPath, existing + line);
+    } catch { /* ignore */ }
+  };
+  
+  debugLog(`Called for agent: ${agent.id}`);
+  
   const videoPath = getIntroVideoPath(agent);
   
+  debugLog(`Video path resolved: ${videoPath || 'null'}`);
+  
   if (!videoPath) {
+    debugLog(`No video file found for ${agent.name}`);
     console.log(`[Intro] No video file found for ${agent.name}`);
     return { pid: null, duration: 0 };
   }
 
   console.log(`[Intro] Playing: ${videoPath}`);
+  debugLog(`Playing video: ${videoPath}`);
   
   const plat = platform();
   const duration = agent.introDuration;
@@ -412,6 +439,7 @@ export function playIntroVideo(agent: AIAgent): { pid: number | null; duration: 
 
   try {
     if (plat === 'win32') {
+      debugLog(`Platform: win32, using Start-Process`);
       // Windows: Use Start-Process (proven to work) and spawn separate closer
       // Step 1: Open video immediately with Start-Process
       exec(`powershell -Command "Start-Process '${videoPath.replace(/'/g, "''")}'"`);
@@ -425,6 +453,7 @@ export function playIntroVideo(agent: AIAgent): { pid: number | null; duration: 
       }).unref();
       
       pid = process.pid;
+      debugLog(`Video launched with pid: ${pid}`);
       
     } else if (plat === 'darwin') {
       // macOS: Use 'open' command and close after duration

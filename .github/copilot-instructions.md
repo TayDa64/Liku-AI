@@ -11,7 +11,11 @@
 > 2. **THEN READ:** Game-specific docs in `docs/ai/` (e.g., `LIKU-CHESS.md`)
 > 
 > The game MUST run in a **separate terminal window**, not in VS Code's integrated terminal.
-> See LIKU-CORE.md for the correct `Start-Process` command.
+> 
+> **Correct command:**
+> ```powershell
+> Start-Process pwsh -ArgumentList "-NoExit", "-Command", "cd C:\dev\Liku-AI; `$env:LIKU_SAFE_LAUNCH='1'; node dist/index.js"
+> ```
 
 ---
 
