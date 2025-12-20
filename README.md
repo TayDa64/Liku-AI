@@ -145,6 +145,8 @@ cat likubuddy-state.txt
 node send-command.js --key down
 node send-command.js --key enter
 ```
+![codex_playing_chess_Liku-AI](https://github.com/user-attachments/assets/5ae80bb7-1195-4d64-a0ec-2e6cadbce6d6)
+
 
 ### Available Commands
 
